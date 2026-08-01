@@ -1,24 +1,81 @@
 package dev.fasa
 
 import android.app.TimePickerDialog
+import android.content.Context
 import android.content.Intent
-import android.graphics.Typeface
 import android.os.Bundle
-import android.view.Gravity
-import android.view.View
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.TextView
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
-import androidx.health.connect.client.PermissionController
-import androidx.lifecycle.lifecycleScope
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.LocalCafe
+import androidx.compose.material.icons.filled.MonitorHeart
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Science
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import dev.fasa.db.Db
 import dev.fasa.db.Meta
 import dev.fasa.health.HealthRepo
 import dev.fasa.model.Band
 import dev.fasa.model.Engine
+import dev.fasa.model.Filter
 import dev.fasa.model.Forecast
+import dev.fasa.ui.DayRing
+import dev.fasa.ui.DriftChart
+import dev.fasa.ui.Histogram
+import dev.fasa.ui.FasaTheme
+import dev.fasa.ui.Prefs
+import dev.fasa.ui.RingArc
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -29,368 +86,559 @@ import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
 
-    private enum class Tab { TODAY, DRIFT, MODEL, DATA }
-
-    private lateinit var content: LinearLayout
-    private var tab = Tab.TODAY
-    private var notice: String? = null
-
-    private val clock = SimpleDateFormat("HH:mm", Locale.getDefault())
-    private val clockDay = SimpleDateFormat("EEE HH:mm", Locale.getDefault())
-
-    private val ask = registerForActivityResult(
-        PermissionController.createRequestPermissionResultContract()
-    ) { granted ->
-        notice = getString(
-            if (granted.containsAll(HealthRepo.CORE)) R.string.perms_ok
-            else R.string.perms_partial
-        )
-        render()
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(48, 72, 48, 24)
-        }
-
-        val tabs = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
-        tabs.addView(tabButton(R.string.tab_today, Tab.TODAY))
-        tabs.addView(tabButton(R.string.tab_drift, Tab.DRIFT))
-        tabs.addView(tabButton(R.string.tab_model, Tab.MODEL))
-        tabs.addView(tabButton(R.string.tab_data, Tab.DATA))
-        root.addView(tabs)
-
-        content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, 32, 0, 0)
-        }
-        root.addView(ScrollView(this).apply { addView(content) })
-
-        setContentView(root)
-        render()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        render()
-    }
-
-    private fun tabButton(labelRes: Int, target: Tab) = Button(this).apply {
-        setText(labelRes)
-        textSize = 12f
-        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        setOnClickListener {
-            tab = target
-            notice = null
-            render()
-        }
-    }
-
-    // ---- rendering -------------------------------------------------------
-
-    private fun render() {
-        content.removeAllViews()
-        when (tab) {
-            Tab.TODAY -> renderForecast(detailed = false)
-            Tab.DRIFT -> renderForecast(detailed = true)
-            Tab.MODEL -> renderModel()
-            Tab.DATA -> renderData()
-        }
-    }
-
-    private fun renderForecast(detailed: Boolean) {
-        content.addView(body(getString(R.string.computing)))
-        lifecycleScope.launch {
-            val f = runCatching { Engine.forecast(this@MainActivity) }.getOrNull()
-            content.removeAllViews()
-
-            if (f == null) {
-                content.addView(body(getString(R.string.f_error)))
-                return@launch
-            }
-
-            if (f.nights == 0) {
-                content.addView(callout(getString(R.string.f_cold)))
-            }
-
-            content.addView(prediction(R.string.f_gate, f.gate))
-            content.addView(prediction(R.string.f_onset, f.onset))
-            content.addView(prediction(R.string.f_wake, f.wake))
-
-            if (f.reverseAlarm != null) {
-                content.addView(prediction(R.string.f_reverse, f.reverseAlarm))
-            } else {
-                content.addView(body(getString(R.string.f_no_alarm)))
-            }
-
-            content.addView(alarmButton())
-
-            if (f.caffeineNow >= 1.0) {
-                content.addView(body(getString(R.string.f_caffeine, f.caffeineNow)))
-            }
-
-            if (detailed) renderDrift(f)
-        }
-    }
-
-    private fun renderDrift(f: Forecast) {
-        content.addView(header(getString(R.string.tab_drift)))
-
-        val minutes = (f.driftPerDay * 60.0).roundToInt()
-        val human = if (abs(minutes) >= 60) {
-            getString(R.string.f_drift_hm, minutes / 60, abs(minutes % 60))
-        } else {
-            getString(R.string.f_drift_m, minutes)
-        }
-        content.addView(body(getString(R.string.f_drift, human)))
-        content.addView(body(getString(R.string.f_drift_hint)))
-
-        // Where the same gate lands over the coming week if nothing intervenes.
-        content.addView(header(getString(R.string.f_week)))
-        for (day in 1..7) {
-            val shifted = f.gate.median + f.driftPerDay * day
-            content.addView(
-                body(
-                    getString(
-                        R.string.f_week_row,
-                        day,
-                        clockDay.format(Date(Engine.millisOf(shifted))),
-                    )
-                )
-            )
-        }
-    }
-
-    private fun renderModel() {
-        content.addView(body(getString(R.string.computing)))
-        lifecycleScope.launch {
-            val filter = runCatching { Engine.load(this@MainActivity) }.getOrNull()
-            val nights = Db.get(this@MainActivity).nights().count()
-            content.removeAllViews()
-
-            if (filter == null) {
-                content.addView(body(getString(R.string.f_error)))
-                return@launch
-            }
-
-            fun median(pick: (dev.fasa.model.Particle) -> Double): Double =
-                filter.particles.map(pick).sorted()[filter.particles.size / 2]
-
-            content.addView(body(getString(R.string.f_nights, nights)))
-            content.addView(body(getString(R.string.f_tau, median { it.tau })))
-            content.addView(body(getString(R.string.f_latency, median { it.latency })))
-            content.addView(body(getString(R.string.f_rise, median { it.tauRise })))
-            content.addView(body(getString(R.string.f_fall, median { it.tauFall })))
-            content.addView(
-                body(
-                    getString(
-                        R.string.f_particles,
-                        filter.particles.size,
-                        filter.ess().roundToInt(),
-                    )
-                )
-            )
-            content.addView(body(getString(R.string.f_model_hint)))
-
-            content.addView(Button(this@MainActivity).apply {
-                setText(R.string.btn_refit)
-                setOnClickListener {
-                    isEnabled = false
-                    lifecycleScope.launch {
-                        Engine.refit(this@MainActivity)
-                        render()
-                    }
+        setContent {
+            FasaTheme(dynamic = Prefs.dynamic(this)) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background,
+                ) {
+                    AppScreen()
                 }
-            })
+            }
         }
     }
+}
 
-    private fun renderData() {
-        content.addView(body(getString(R.string.computing)))
-        lifecycleScope.launch {
-            val db = Db.get(this@MainActivity)
-            val count = db.nights().count()
-            val lastEnd = db.nights().lastSleepEnd()
-            val granted = HealthRepo.grantedSet(this@MainActivity)
-            val yes = getString(R.string.state_granted)
-            val no = getString(R.string.state_denied)
+private enum class Tab { TODAY, DRIFT, MODEL, DATA }
 
-            content.removeAllViews()
-            content.addView(
-                body(
-                    getString(R.string.hc_label) + ": " + getString(
-                        when (HealthRepo.status(this@MainActivity)) {
-                            HealthRepo.Status.OK -> R.string.hc_ok
-                            HealthRepo.Status.NEEDS_UPDATE -> R.string.hc_update
-                            HealthRepo.Status.NOT_INSTALLED -> R.string.hc_missing
-                        }
-                    )
-                )
-            )
-            content.addView(
-                body(
-                    getString(R.string.perm_core) + ": " +
-                        if (granted.containsAll(HealthRepo.CORE)) yes else no
-                )
-            )
-            content.addView(
-                body(
-                    getString(R.string.perm_extra) + ": " +
-                        if (granted.containsAll(HealthRepo.EXTRA)) yes else no
-                )
-            )
-            content.addView(body(getString(R.string.nights_count, count)))
-            content.addView(
-                body(
-                    getString(
-                        R.string.last_wake,
-                        lastEnd?.let { clockDay.format(Date(it)) } ?: getString(R.string.none)
-                    )
-                )
-            )
+private fun hhmm(hour: Double): String =
+    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(Engine.millisOf(hour)))
 
-            notice?.let { content.addView(callout(it)) }
+private fun dayTime(millis: Long): String =
+    SimpleDateFormat("EEE HH:mm", Locale.getDefault()).format(Date(millis))
 
-            content.addView(Button(this@MainActivity).apply {
-                setText(R.string.btn_permissions)
-                setOnClickListener { ask.launch(HealthRepo.ALL) }
-            })
+private fun nowHour(): Double = Engine.hourOf(System.currentTimeMillis())
 
-            content.addView(Button(this@MainActivity).apply {
-                setText(R.string.btn_sync)
-                setOnClickListener {
-                    isEnabled = false
-                    val button = this
-                    lifecycleScope.launch {
-                        notice = when (val r = HealthRepo.sync(this@MainActivity)) {
-                            is HealthRepo.Result.Ok ->
-                                getString(R.string.sync_result, r.sessions, r.added)
-                            is HealthRepo.Result.Blocked -> getString(
-                                when (r.reason) {
-                                    HealthRepo.Reason.NO_HEALTH_CONNECT -> R.string.blocked_no_hc
-                                    HealthRepo.Reason.NEEDS_UPDATE -> R.string.blocked_update
-                                    HealthRepo.Reason.NO_PERMISSION -> R.string.blocked_perms
-                                }
-                            )
-                            is HealthRepo.Result.Failed ->
-                                getString(R.string.error_prefix, r.error)
-                        }
-                        // New nights change the model, so refit before showing anything.
-                        Engine.refit(this@MainActivity)
-                        button.isEnabled = true
-                        render()
-                    }
-                }
-            })
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AppScreen() {
+    val context = LocalContext.current
+    var tab by remember { mutableStateOf(Tab.TODAY) }
+    var refresh by remember { mutableIntStateOf(0) }
 
-            content.addView(Button(this@MainActivity).apply {
-                setText(R.string.btn_settings)
-                setOnClickListener {
-                    startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
-                }
-            })
-        }
-    }
-
-    // ---- pieces ----------------------------------------------------------
-
-    private fun alarmButton() = Button(this).apply {
-        setText(R.string.btn_alarm)
-        setOnClickListener {
-            val cal = Calendar.getInstance()
-            TimePickerDialog(
-                this@MainActivity,
-                { _, h, m ->
-                    lifecycleScope.launch {
-                        Db.get(this@MainActivity).meta().put(
-                            Meta(Engine.KEY_ALARM, String.format(Locale.US, "%02d:%02d", h, m))
-                        )
-                        render()
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.app_name)) },
+                actions = {
+                    IconButton(onClick = {
+                        context.startActivity(Intent(context, SettingsActivity::class.java))
+                    }) {
+                        Icon(Icons.Filled.Settings, contentDescription = null)
                     }
                 },
-                cal.get(Calendar.HOUR_OF_DAY),
-                cal.get(Calendar.MINUTE),
-                true,
-            ).show()
+            )
+        },
+        bottomBar = {
+            NavigationBar {
+                NavItem(tab, Tab.TODAY, Icons.Filled.Bedtime, R.string.tab_today) { tab = it }
+                NavItem(tab, Tab.DRIFT, Icons.Filled.Timeline, R.string.tab_drift) { tab = it }
+                NavItem(tab, Tab.MODEL, Icons.Filled.Science, R.string.tab_model) { tab = it }
+                NavItem(tab, Tab.DATA, Icons.Filled.MonitorHeart, R.string.tab_data) { tab = it }
+            }
+        },
+    ) { inner ->
+        Column(
+            modifier = Modifier
+                .padding(inner)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+        ) {
+            when (tab) {
+                Tab.TODAY -> TodayTab(refresh) { refresh++ }
+                Tab.DRIFT -> DriftTab(refresh)
+                Tab.MODEL -> ModelTab(refresh) { refresh++ }
+                Tab.DATA -> DataTab(refresh) { refresh++ }
+            }
+            Spacer(Modifier.height(24.dp))
         }
     }
+}
 
-    // A prediction is never a bare time. It always carries its own uncertainty,
-    // because a confident wrong bedtime is worse than an honest range.
-    private fun prediction(labelRes: Int, band: Band): View {
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, 20, 0, 20)
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.NavItem(
+    current: Tab,
+    target: Tab,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    labelRes: Int,
+    onSelect: (Tab) -> Unit,
+) {
+    NavigationBarItem(
+        selected = current == target,
+        onClick = { onSelect(target) },
+        icon = { Icon(icon, contentDescription = null) },
+        label = { Text(stringResource(labelRes)) },
+    )
+}
+
+// ---- shared pieces -------------------------------------------------------
+
+@Composable
+private fun Loading() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(220.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        CircularProgressIndicator()
+    }
+}
+
+@Composable
+private fun SectionCard(content: @Composable () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) { content() }
+    }
+}
+
+@Composable
+private fun Label(text: String) {
+    Text(
+        text = text.uppercase(Locale.getDefault()),
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+// A band never prints a number for its own confidence. Below half certainty a
+// single time would be a lie, so only the range is shown.
+@Composable
+private fun BandRow(color: Color, labelRes: Int, band: Band) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .clip(CircleShape)
+                .let { it },
+        ) {
+            Surface(color = color, modifier = Modifier.fillMaxSize(), shape = CircleShape) {}
         }
-
-        val percent = (band.confidence * 100).roundToInt()
-        val mark = when {
-            percent >= 75 -> "\uD83D\uDFE2"
-            percent >= 50 -> "\uD83D\uDFE1"
-            else -> "\u26AA"
-        }
-
-        box.addView(TextView(this).apply {
-            text = mark + "  " + getString(labelRes)
-            textSize = 14f
-            alpha = 0.75f
-        })
-
-        // Below 50 percent a single number would be a lie. Show the range only.
-        box.addView(TextView(this).apply {
-            text = if (percent >= 50) {
-                clock.format(Date(Engine.millisOf(band.median)))
-            } else {
-                getString(
-                    R.string.f_range,
-                    clock.format(Date(Engine.millisOf(band.low))),
-                    clock.format(Date(Engine.millisOf(band.high))),
+        Spacer(Modifier.size(12.dp))
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Label(stringResource(labelRes))
+            Text(
+                text = if (band.confidence >= 0.5) hhmm(band.median)
+                else stringResource(R.string.f_range, hhmm(band.low), hhmm(band.high)),
+                style = MaterialTheme.typography.headlineSmall,
+            )
+            if (band.confidence >= 0.5) {
+                Text(
+                    text = stringResource(R.string.f_range, hhmm(band.low), hhmm(band.high)),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            textSize = 26f
-            setTypeface(typeface, Typeface.BOLD)
-        })
+        }
+    }
+}
 
-        box.addView(TextView(this).apply {
-            text = if (percent >= 50) {
-                getString(
-                    R.string.f_range,
-                    clock.format(Date(Engine.millisOf(band.low))),
-                    clock.format(Date(Engine.millisOf(band.high))),
-                ) + "  \u00B7  " + getString(R.string.f_conf, percent)
-            } else {
-                getString(R.string.f_conf, percent)
+// ---- today ---------------------------------------------------------------
+
+@Composable
+private fun TodayTab(refresh: Int, onChanged: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var forecast by remember { mutableStateOf<Forecast?>(null) }
+    var failed by remember { mutableStateOf(false) }
+
+    LaunchedEffect(refresh) {
+        failed = false
+        forecast = null
+        val f = runCatching { Engine.forecast(context) }.getOrNull()
+        if (f == null) failed = true else forecast = f
+    }
+
+    if (failed) {
+        SectionCard { Text(stringResource(R.string.f_error)) }
+        return
+    }
+    val f = forecast ?: run {
+        Loading()
+        return
+    }
+
+    val gateColor = MaterialTheme.colorScheme.primary
+    val onsetColor = MaterialTheme.colorScheme.secondary
+    val wakeColor = MaterialTheme.colorScheme.tertiary
+
+    Spacer(Modifier.height(8.dp))
+
+    DayRing(
+        nowHour = nowHour(),
+        arcs = listOf(
+            RingArc(f.gate.low, f.gate.median, f.gate.high, f.gate.confidence, gateColor, 0.dp),
+            RingArc(f.onset.low, f.onset.median, f.onset.high, f.onset.confidence, onsetColor, 22.dp),
+            RingArc(f.wake.low, f.wake.median, f.wake.high, f.wake.confidence, wakeColor, 44.dp),
+        ),
+        trackColor = MaterialTheme.colorScheme.outlineVariant,
+        tickColor = MaterialTheme.colorScheme.outlineVariant,
+        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        nowColor = MaterialTheme.colorScheme.onBackground,
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(1f),
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Label(stringResource(R.string.f_onset))
+            Text(
+                text = if (f.onset.confidence >= 0.5) hhmm(f.onset.median)
+                else stringResource(R.string.f_range, hhmm(f.onset.low), hhmm(f.onset.high)),
+                style = MaterialTheme.typography.displayLarge,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+
+    if (f.nights == 0) {
+        SectionCard {
+            Text(
+                stringResource(R.string.f_cold),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+    }
+
+    SectionCard {
+        BandRow(gateColor, R.string.f_gate, f.gate)
+        BandRow(onsetColor, R.string.f_onset, f.onset)
+        BandRow(wakeColor, R.string.f_wake, f.wake)
+    }
+
+    SectionCard {
+        if (f.reverseAlarm != null) {
+            BandRow(MaterialTheme.colorScheme.primary, R.string.f_reverse, f.reverseAlarm)
+        } else {
+            Text(
+                stringResource(R.string.f_no_alarm),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(onClick = { pickAlarm(context, scope, onChanged) }) {
+            Icon(Icons.Filled.Alarm, contentDescription = null)
+            Spacer(Modifier.size(8.dp))
+            Text(stringResource(R.string.btn_alarm))
+        }
+    }
+
+    if (f.caffeineNow >= 1.0) {
+        SectionCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.LocalCafe,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.secondary,
+                )
+                Spacer(Modifier.size(12.dp))
+                Text(
+                    stringResource(R.string.f_caffeine, f.caffeineNow),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             }
-            textSize = 13f
-            alpha = 0.65f
-        })
+        }
+    }
+}
 
-        return box
+private fun pickAlarm(
+    context: Context,
+    scope: kotlinx.coroutines.CoroutineScope,
+    onChanged: () -> Unit,
+) {
+    val cal = Calendar.getInstance()
+    TimePickerDialog(
+        context,
+        { _, h, m ->
+            scope.launch {
+                Db.get(context).meta().put(
+                    Meta(Engine.KEY_ALARM, String.format(Locale.US, "%02d:%02d", h, m))
+                )
+                onChanged()
+            }
+        },
+        cal.get(Calendar.HOUR_OF_DAY),
+        cal.get(Calendar.MINUTE),
+        true,
+    ).show()
+}
+
+// ---- drift ---------------------------------------------------------------
+
+@Composable
+private fun DriftTab(refresh: Int) {
+    val context = LocalContext.current
+    var forecast by remember { mutableStateOf<Forecast?>(null) }
+
+    LaunchedEffect(refresh) {
+        forecast = runCatching { Engine.forecast(context) }.getOrNull()
     }
 
-    private fun header(text: String) = TextView(this).apply {
-        this.text = text
-        textSize = 18f
-        setPadding(0, 40, 0, 12)
+    val f = forecast ?: run {
+        Loading()
+        return
     }
 
-    private fun body(text: String) = TextView(this).apply {
-        this.text = text
-        textSize = 15f
-        setPadding(0, 8, 0, 8)
-        setLineSpacing(0f, 1.25f)
+    val minutes = (f.driftPerDay * 60.0).roundToInt()
+    val human = if (abs(minutes) >= 60) {
+        stringResource(R.string.f_drift_hm, minutes / 60, abs(minutes % 60))
+    } else {
+        stringResource(R.string.f_drift_m, minutes)
     }
 
-    private fun callout(text: String) = TextView(this).apply {
-        this.text = text
-        textSize = 14f
-        setPadding(28, 24, 28, 24)
-        alpha = 0.85f
+    Spacer(Modifier.height(8.dp))
+
+    SectionCard {
+        Label(stringResource(R.string.tab_drift))
+        Text(human, style = MaterialTheme.typography.displayLarge)
+        Text(
+            stringResource(R.string.f_drift_hint),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+
+    val points = (0..7).map { f.gate.median + f.driftPerDay * it }
+
+    SectionCard {
+        Label(stringResource(R.string.f_drift_chart))
+        Spacer(Modifier.height(12.dp))
+        DriftChart(
+            hours = points,
+            lineColor = MaterialTheme.colorScheme.primary,
+            fillColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+            gridColor = MaterialTheme.colorScheme.outlineVariant,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp),
+        )
+    }
+
+    SectionCard {
+        Label(stringResource(R.string.f_week))
+        for (day in 1..7) {
+            val shifted = f.gate.median + f.driftPerDay * day
+            InfoRow(
+                stringResource(R.string.f_week_day, day),
+                dayTime(Engine.millisOf(shifted)),
+            )
+        }
+    }
+}
+
+// ---- model ---------------------------------------------------------------
+
+@Composable
+private fun ModelTab(refresh: Int, onChanged: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var filter by remember { mutableStateOf<Filter?>(null) }
+    var nights by remember { mutableIntStateOf(0) }
+    var busy by remember { mutableStateOf(false) }
+
+    LaunchedEffect(refresh) {
+        filter = runCatching { Engine.load(context) }.getOrNull()
+        nights = runCatching { Db.get(context).nights().count() }.getOrDefault(0)
+    }
+
+    val f = filter ?: run {
+        Loading()
+        return
+    }
+
+    fun median(pick: (dev.fasa.model.Particle) -> Double): Double =
+        f.particles.map(pick).sorted()[f.particles.size / 2]
+
+    Spacer(Modifier.height(8.dp))
+
+    SectionCard {
+        Label(stringResource(R.string.f_hist_tau))
+        Spacer(Modifier.height(12.dp))
+        Histogram(
+            values = f.particles.map { it.tau },
+            bins = 28,
+            barColor = MaterialTheme.colorScheme.primary,
+            baseColor = MaterialTheme.colorScheme.outlineVariant,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(150.dp),
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(
+            stringResource(R.string.f_model_hint),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+
+    SectionCard {
+        InfoRow(stringResource(R.string.f_nights, nights), "")
+        InfoRow(stringResource(R.string.tab_model), stringResource(R.string.f_tau, median { it.tau }))
+        InfoRow("", stringResource(R.string.f_latency, median { it.latency }))
+        InfoRow("", stringResource(R.string.f_rise, median { it.tauRise }))
+        InfoRow("", stringResource(R.string.f_fall, median { it.tauFall }))
+        InfoRow(
+            "",
+            stringResource(R.string.f_particles, f.particles.size, f.ess().roundToInt()),
+        )
+    }
+
+    Button(
+        enabled = !busy,
+        onClick = {
+            busy = true
+            scope.launch {
+                runCatching { Engine.refit(context) }
+                busy = false
+                onChanged()
+            }
+        },
+    ) {
+        Icon(Icons.Filled.Refresh, contentDescription = null)
+        Spacer(Modifier.size(8.dp))
+        Text(stringResource(R.string.btn_refit))
+    }
+}
+
+// ---- data ----------------------------------------------------------------
+
+@Composable
+private fun DataTab(refresh: Int, onChanged: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    var loaded by remember { mutableStateOf(false) }
+    var hcState by remember { mutableIntStateOf(R.string.hc_missing) }
+    var core by remember { mutableStateOf(false) }
+    var extra by remember { mutableStateOf(false) }
+    var nights by remember { mutableIntStateOf(0) }
+    var lastWake by remember { mutableStateOf<Long?>(null) }
+    var notice by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+
+    val okText = stringResource(R.string.perms_ok)
+    val partialText = stringResource(R.string.perms_partial)
+
+    val ask = rememberLauncherForActivityResult(
+        androidx.health.connect.client.PermissionController
+            .createRequestPermissionResultContract()
+    ) { granted ->
+        notice = if (granted.containsAll(HealthRepo.CORE)) okText else partialText
+        onChanged()
+    }
+
+    LaunchedEffect(refresh) {
+        loaded = false
+        val db = Db.get(context)
+        nights = runCatching { db.nights().count() }.getOrDefault(0)
+        lastWake = runCatching { db.nights().lastSleepEnd() }.getOrNull()
+        val granted = runCatching { HealthRepo.grantedSet(context) }.getOrDefault(emptySet())
+        core = granted.containsAll(HealthRepo.CORE)
+        extra = granted.containsAll(HealthRepo.EXTRA)
+        hcState = when (HealthRepo.status(context)) {
+            HealthRepo.Status.OK -> R.string.hc_ok
+            HealthRepo.Status.NEEDS_UPDATE -> R.string.hc_update
+            HealthRepo.Status.NOT_INSTALLED -> R.string.hc_missing
+        }
+        loaded = true
+    }
+
+    if (!loaded) {
+        Loading()
+        return
+    }
+
+    val yes = stringResource(R.string.state_granted)
+    val no = stringResource(R.string.state_denied)
+
+    Spacer(Modifier.height(8.dp))
+
+    SectionCard {
+        InfoRow(stringResource(R.string.hc_label), stringResource(hcState))
+        InfoRow(stringResource(R.string.perm_core), if (core) yes else no)
+        InfoRow(stringResource(R.string.perm_extra), if (extra) yes else no)
+        InfoRow(stringResource(R.string.nights_count, nights), "")
+        InfoRow(
+            stringResource(R.string.last_wake, "").trim(),
+            lastWake?.let { dayTime(it) } ?: stringResource(R.string.none),
+        )
+    }
+
+    notice?.let {
+        SectionCard { Text(it, style = MaterialTheme.typography.bodyMedium) }
+    }
+
+    SectionCard {
+        OutlinedButton(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = { ask.launch(HealthRepo.ALL) },
+        ) {
+            Icon(Icons.Filled.Key, contentDescription = null)
+            Spacer(Modifier.size(8.dp))
+            Text(stringResource(R.string.btn_permissions))
+        }
+        Spacer(Modifier.height(8.dp))
+        Button(
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                busy = true
+                scope.launch {
+                    notice = when (val r = HealthRepo.sync(context)) {
+                        is HealthRepo.Result.Ok ->
+                            context.getString(R.string.sync_result, r.sessions, r.added)
+                        is HealthRepo.Result.Blocked -> context.getString(
+                            when (r.reason) {
+                                HealthRepo.Reason.NO_HEALTH_CONNECT -> R.string.blocked_no_hc
+                                HealthRepo.Reason.NEEDS_UPDATE -> R.string.blocked_update
+                                HealthRepo.Reason.NO_PERMISSION -> R.string.blocked_perms
+                            }
+                        )
+                        is HealthRepo.Result.Failed ->
+                            context.getString(R.string.error_prefix, r.error)
+                    }
+                    // New nights change the model, so refit before showing anything.
+                    runCatching { Engine.refit(context) }
+                    busy = false
+                    onChanged()
+                }
+            },
+        ) {
+            Icon(Icons.Filled.Sync, contentDescription = null)
+            Spacer(Modifier.size(8.dp))
+            Text(stringResource(R.string.btn_sync))
+        }
     }
 }

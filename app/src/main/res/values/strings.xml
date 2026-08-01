@@ -118,4 +118,10 @@
     <string name="st_verdict_ok">Everything needed is working.</string>
     <string name="st_verdict_warn">Works, but with limitations. See the warnings above.</string>
     <string name="st_verdict_fail">Blocking problems found. Data will not be collected.</string>
+    <string name="f_hist_tau">Circadian period across hypotheses</string>
+    <string name="f_drift_chart">Sleep gate over the next week</string>
+    <string name="f_week_day">In %1$d days</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_dynamic">Wallpaper colours</string>
+    <string name="settings_dynamic_hint">Android 12 and newer. Off by default: a sleep app is opened at night, so it stays dark and calm.</string>
 </resources>

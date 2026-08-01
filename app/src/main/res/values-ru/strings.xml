@@ -118,4 +118,10 @@
     <string name="st_verdict_ok">Всё нужное работает.</string>
     <string name="st_verdict_warn">Работает, но с ограничениями. Смотри предупреждения выше.</string>
     <string name="st_verdict_fail">Найдены блокирующие проблемы. Данные собираться не будут.</string>
+    <string name="f_hist_tau">Период ритма по всем гипотезам</string>
+    <string name="f_drift_chart">Ворота сна на неделю вперёд</string>
+    <string name="f_week_day">Через %1$d дн.</string>
+    <string name="settings_appearance">Оформление</string>
+    <string name="settings_dynamic">Цвета из обоев</string>
+    <string name="settings_dynamic_hint">Android 12 и новее. По умолчанию выключено: приложение про сон открывают ночью, поэтому тема тёмная и спокойная.</string>
 </resources>
