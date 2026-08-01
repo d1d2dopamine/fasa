@@ -200,8 +200,12 @@ object SelfTest {
 
         // 8. Light sensor
         val lux = readLuxOnce(context)
+        // The ceiling matters as much as the reading. A sensor that cannot
+        // report more than a few dozen lux explains a suspiciously low peak
+        // better than any amount of guessing about where the phone was lying.
+        val range = luxRange(context) ?: 0f
         out += if (lux != null) {
-            Line(Level.OK, context.getString(R.string.st_light_ok, lux))
+            Line(Level.OK, context.getString(R.string.st_light_ok, lux, range))
         } else {
             Line(Level.WARN, context.getString(R.string.st_light_none))
         }
@@ -250,6 +254,13 @@ object SelfTest {
             else -> Line(Level.OK, context.getString(R.string.st_verdict_ok))
         }
         return Report(lines, verdict)
+    }
+
+    /** The largest value this sensor is able to report. */
+    private fun luxRange(context: Context): Float? {
+        val sm = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+            ?: return null
+        return sm.getDefaultSensor(Sensor.TYPE_LIGHT)?.maximumRange
     }
 
     /** One reading from the ambient light sensor, or null if there is none. */

@@ -106,7 +106,7 @@
     <string name="st_db_ok">Local database: read and write work, %1$d nights stored</string>
     <string name="st_db_fail">Local database: failure \u2014 %1$s</string>
 
-    <string name="st_light_ok">Light sensor: present, current reading %1$.0f lux</string>
+    <string name="st_light_ok">Light sensor: present, now %1$.0f lux, ceiling %2$.0f lux</string>
     <string name="st_tg_ok">Telegram: bot reachable.</string>
     <string name="st_tg_fail">Telegram: bot not reachable (%1$s).</string>
     <string name="st_tg_none">Telegram: not set up. Morning questions and forecasts will not be sent.</string>

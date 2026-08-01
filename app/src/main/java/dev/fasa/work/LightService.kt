@@ -73,7 +73,11 @@ class LightService : Service(), SensorEventListener {
         super.onCreate()
         Notify.ensureChannels(this)
         sensors = getSystemService(Context.SENSOR_SERVICE) as? SensorManager
-        light = sensors?.getDefaultSensor(Sensor.TYPE_LIGHT)
+        // A wake-up sensor keeps reporting while the phone is dozing. Without
+        // it the eight second window can close with nothing in it, and the last
+        // stale value wins.
+        light = sensors?.getDefaultSensor(Sensor.TYPE_LIGHT, true)
+            ?: sensors?.getDefaultSensor(Sensor.TYPE_LIGHT)
         // Screen state is not delivered to manifest receivers, only to a live
         // one, which is exactly what a running service is for.
         ContextCompat.registerReceiver(
@@ -151,10 +155,13 @@ class LightService : Service(), SensorEventListener {
         if (listening) return
 
         windowMax = null
+        // The window is short, so ask for everything the sensor has. The cost
+        // is eight seconds of samples, and the gain is a peak that is not an
+        // accident of timing.
         listening = manager.registerListener(
             this,
             sensor,
-            SensorManager.SENSOR_DELAY_NORMAL,
+            SensorManager.SENSOR_DELAY_FASTEST,
         )
         if (listening) handler.postDelayed(closeWindow, WINDOW_MS)
     }
