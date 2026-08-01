@@ -263,4 +263,6 @@
     <string name="tgb_cmd_last">Замеры прошлой ночи</string>
     <string name="tgb_last_none">Записей пока нет.</string>
     <string name="tgb_phases_none">Фазы: не измерялись</string>
+    <string name="nt_down_title">fasa была остановлена системой</string>
+    <string name="nt_down_text">Фоновая работа была заморожена %1$d минут, ответы в Telegram приходили с опозданием. Разрешите автозапуск и работу в фоне для fasa в системных настройках батареи.</string>
 </resources>

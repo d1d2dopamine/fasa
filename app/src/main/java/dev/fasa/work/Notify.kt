@@ -24,6 +24,7 @@ object Notify {
 
     const val ID_SERVICE = 1
     const val ID_STALE = 2
+    const val ID_DOWN = 3
 
     fun ensureChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -80,6 +81,25 @@ object Notify {
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .build()
+    }
+
+    // The system killed the background half of the app. Saying so plainly is
+    // better than letting the user conclude the bot is broken.
+    fun downtime(context: Context, minutes: Long) {
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return
+        val text = context.getString(R.string.nt_down_text, minutes)
+        val notification = NotificationCompat.Builder(context, CH_ALERT)
+            .setSmallIcon(R.drawable.ic_stat_fasa)
+            .setContentTitle(context.getString(R.string.nt_down_title))
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(openApp(context))
+            .setAutoCancel(true)
+            .build()
+        try {
+            NotificationManagerCompat.from(context).notify(ID_DOWN, notification)
+        } catch (_: SecurityException) {
+        }
     }
 
     fun stale(context: Context, hours: Long) {

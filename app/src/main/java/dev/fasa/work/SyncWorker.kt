@@ -23,6 +23,11 @@ class SyncWorker(context: Context, params: WorkerParameters) :
         val db = Db.get(context)
         val now = System.currentTimeMillis()
 
+        // If this worker ran at all, the alarm chain may still be broken after
+        // a force stop or an update. Re-arming here costs nothing.
+        Watchdog.arm(context)
+        runCatching { Watchdog.check(context) }
+
         when (val outcome = HealthRepo.sync(context)) {
             is HealthRepo.Result.Ok -> {
                 if (outcome.added > 0) {

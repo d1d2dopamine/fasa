@@ -17,6 +17,7 @@ object Scheduler {
         Notify.ensureChannels(context)
         scheduleSync(context)
         LightService.start(context)
+        Watchdog.arm(context)
     }
 
     private fun scheduleSync(context: Context) {

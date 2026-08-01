@@ -20,13 +20,10 @@ import dev.fasa.db.Db
 import dev.fasa.db.Meta
 import dev.fasa.health.HealthRepo
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
-import kotlin.coroutines.resume
 
 /**
  * End to end diagnostics. Answers one question: does data from the watch
@@ -263,26 +260,39 @@ object SelfTest {
         return sm.getDefaultSensor(Sensor.TYPE_LIGHT)?.maximumRange
     }
 
-    /** One reading from the ambient light sensor, or null if there is none. */
+    /**
+     * The brightest value the light sensor reports over a short burst.
+     *
+     * The first event after registering is very often a stale zero left over
+     * from when the sensor was powered down, so taking one reading and leaving
+     * reports darkness in a sunlit room. Waiting a couple of seconds and
+     * keeping the peak avoids that.
+     */
     private suspend fun readLuxOnce(context: Context): Float? {
         val sm = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
             ?: return null
-        val sensor = sm.getDefaultSensor(Sensor.TYPE_LIGHT) ?: return null
+        val sensor = sm.getDefaultSensor(Sensor.TYPE_LIGHT, true)
+            ?: sm.getDefaultSensor(Sensor.TYPE_LIGHT)
+            ?: return null
 
-        return withTimeoutOrNull(3000) {
-            suspendCancellableCoroutine { cont ->
-                val listener = object : SensorEventListener {
-                    override fun onSensorChanged(event: SensorEvent) {
-                        sm.unregisterListener(this)
-                        if (cont.isActive) cont.resume(event.values.firstOrNull())
-                    }
-
-                    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
-                }
-                sm.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
-                cont.invokeOnCancellation { sm.unregisterListener(listener) }
+        var best: Float? = null
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                val v = event.values.firstOrNull() ?: return
+                val current = best
+                if (current == null || v > current) best = v
             }
+
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
         }
+        val started = sm.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_FASTEST)
+        if (!started) return null
+        try {
+            kotlinx.coroutines.delay(2000)
+        } finally {
+            sm.unregisterListener(listener)
+        }
+        return best
     }
 
     @Suppress("unused")

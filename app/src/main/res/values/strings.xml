@@ -263,4 +263,6 @@
     <string name="tgb_cmd_last">Last night measurements</string>
     <string name="tgb_last_none">Nothing recorded yet.</string>
     <string name="tgb_phases_none">Phases: not measured</string>
+    <string name="nt_down_title">fasa was stopped by the system</string>
+    <string name="nt_down_text">Background work was frozen for %1$d minutes, so Telegram replies were late. Allow auto launch and background activity for fasa in the system battery settings.</string>
 </resources>

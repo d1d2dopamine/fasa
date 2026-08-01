@@ -22,9 +22,28 @@ android {
         compose = true
     }
 
+    signingConfigs {
+        // A fixed key, committed on purpose.
+        //
+        // Without it every CI run generates a fresh random debug key, Android
+        // treats each build as a different app, and the only way to install a
+        // new version is to uninstall the old one. That wipes the database,
+        // the trained model and every battery exemption granted by hand.
+        //
+        // The key has no security value: this app is sideloaded, never
+        // published, and holds no secrets of its own.
+        getByName("debug") {
+            storeFile = file("fasa-debug.jks")
+            storePassword = "fasapass"
+            keyAlias = "fasa"
+            keyPassword = "fasapass"
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
         }
         release {
             isMinifyEnabled = false

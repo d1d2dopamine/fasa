@@ -74,6 +74,12 @@
             </intent-filter>
         </receiver>
 
+        <!-- Fires every fifteen minutes and restarts the service if the
+             heartbeat has gone stale. Not exported: only our own alarm. -->
+        <receiver
+            android:name=".work.WatchdogReceiver"
+            android:exported="false" />
+
         <!-- Health Connect permission rationale, Android 14 and above.
              Without this the app never shows up in the Health Connect app list. -->
         <activity-alias
