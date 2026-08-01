@@ -2,13 +2,49 @@
 <resources>
     <string name="app_name">Фаза</string>
 
+    <string name="tab_today">Сегодня</string>
+    <string name="tab_drift">Дрейф</string>
+    <string name="tab_model">Модель</string>
+    <string name="tab_data">Данные</string>
+
     <string name="btn_permissions">Выдать разрешения</string>
     <string name="btn_sync">Синхронизировать</string>
     <string name="btn_settings">Настройки</string>
+    <string name="btn_alarm">Задать время подъёма</string>
+    <string name="btn_refit">Пересобрать модель</string>
+
+    <string name="computing">Считаю\u2026</string>
+    <string name="f_error">Не удалось построить прогноз.</string>
+    <string name="f_cold">Холодный старт. Реальных ночей ещё нет, поэтому это приоры по популяции. Коридоры сузятся, когда пойдут твои ночи.</string>
+
+    <string name="f_gate">Ворота сна откроются</string>
+    <string name="f_onset">Заснёшь примерно в</string>
+    <string name="f_wake">Естественное пробуждение</string>
+    <string name="f_reverse">Крайний срок засыпания под будильник</string>
+    <string name="f_no_alarm">Время подъёма пока не задано.</string>
+
+    <string name="f_range">между %1$s и %2$s</string>
+    <string name="f_conf">уверенность %1$d%%</string>
+    <string name="f_caffeine">Кофеин в организме: %1$.0f мг</string>
+
+    <string name="f_drift">Дрейф: %1$s в сутки</string>
+    <string name="f_drift_hm">%1$d ч %2$d мин</string>
+    <string name="f_drift_m">%1$d мин</string>
+    <string name="f_drift_hint">Твои внутренние сутки длиннее 24 часов. Если не вмешиваться, всё сползает позже. Это механизм синдрома задержки фазы сна, а не нехватка дисциплины.</string>
+    <string name="f_week">Если ничего не менять</string>
+    <string name="f_week_row">Через %1$d дн.: %2$s</string>
+
+    <string name="f_nights">Ночей в модели: %1$d</string>
+    <string name="f_tau">Период ритма: %1$.2f ч</string>
+    <string name="f_latency">Латентность засыпания: %1$.0f мин</string>
+    <string name="f_rise">Постоянная накопления давления: %1$.1f ч</string>
+    <string name="f_fall">Постоянная сброса давления: %1$.1f ч</string>
+    <string name="f_particles">Гипотез: %1$d, эффективных %2$d</string>
+    <string name="f_model_hint">Модель держит тысячи конкурирующих гипотез о твоём организме. Каждая реальная ночь перевзвешивает их. Падение числа эффективных значит, что модель становится увереннее.</string>
 
     <string name="hc_label">Health Connect</string>
     <string name="hc_ok">готов</string>
-    <string name="hc_update">нужно обновить</string>
+    <string name="hc_update">нужно обновление</string>
     <string name="hc_missing">не установлен</string>
 
     <string name="perm_core">Сон и пульс</string>
@@ -21,12 +57,12 @@
     <string name="none">\u2014</string>
 
     <string name="reading">Читаю\u2026</string>
-    <string name="sync_result">Сессий найдено: %1$d, записано ночей: %2$d</string>
-    <string name="perms_ok">Разрешения получены</string>
+    <string name="sync_result">Найдено сессий: %1$d, сохранено ночей: %2$d</string>
+    <string name="perms_ok">Разрешения выданы</string>
     <string name="perms_partial">Выданы не все разрешения</string>
     <string name="blocked_no_hc">Health Connect не установлен</string>
     <string name="blocked_update">Health Connect нужно обновить</string>
-    <string name="blocked_perms">Нет доступа к сну или пульсу</string>
+    <string name="blocked_perms">Нет разрешения на чтение сна или пульса</string>
     <string name="error_prefix">Ошибка: %1$s</string>
 
     <string name="settings_title">Настройки</string>
@@ -37,7 +73,7 @@
 
     <string name="settings_diagnostics">Диагностика</string>
     <string name="btn_selftest">Запустить проверку</string>
-    <string name="selftest_running">Проверяю\u2026</string>
+    <string name="selftest_running">Идёт проверка\u2026</string>
     <string name="selftest_hint">Проверяет, доходят ли до приложения сон, пульс и кислород с браслета.</string>
 
     <string name="st_hc_ok">Health Connect доступен</string>
@@ -52,22 +88,22 @@
     <string name="st_perm_optional">необязательно, но без него видно только 30 дней</string>
 
     <string name="st_sleep_found">Сон: %1$d сессий за 7 дней</string>
-    <string name="st_sleep_none">Сон: за 7 дней ни одной сессии</string>
+    <string name="st_sleep_none">Сон: сессий пока нет. Для свежей установки это норма \u2014 Health Connect не заливает старые данные, первая ночь появится завтра утром.</string>
     <string name="st_sleep_stages">Фазы сна: есть в %1$d из %2$d сессий</string>
-    <string name="st_sleep_no_stages">Фазы сна: нет. Глубокий и быстрый сон будут недоступны.</string>
+    <string name="st_sleep_no_stages">Фазы сна: нет. Глубокий и REM будут недоступны.</string>
 
     <string name="st_hr_found">Пульс: %1$d замеров за 24 часа</string>
-    <string name="st_hr_none">Пульс: за 24 часа ни одного замера</string>
+    <string name="st_hr_none">Пульс: замеров за 24 часа нет</string>
     <string name="st_hr_coverage_ok">Покрытие пульса: %1$d из 24 часов. Фоновые замеры работают.</string>
-    <string name="st_hr_coverage_low">Покрытие пульса: только %1$d из 24 часов. Похоже на данные только с тренировок \u2014 ночной минимум пульса будет непригоден.</string>
+    <string name="st_hr_coverage_low">Покрытие пульса: только %1$d из 24 часов. Либо связь подключена недавно, либо браслет пишет только на тренировках.</string>
 
     <string name="st_spo2_found">Кислород: %1$d записей за 7 дней</string>
-    <string name="st_spo2_none">Кислород: записей нет. Не критично.</string>
+    <string name="st_spo2_none">Кислород: записей нет. У Band 9 Active нет датчика SpO2, это нормально.</string>
 
     <string name="st_freshness">Свежесть: самой новой записи %1$s</string>
-    <string name="st_freshness_stale">Свежесть: нового нет уже %1$s. Синхронизация скорее всего встала.</string>
+    <string name="st_freshness_stale">Свежесть: ничего нового %1$s. Синхронизация, скорее всего, встала.</string>
 
-    <string name="st_db_ok">Локальная база: чтение и запись работают, ночей сохранено: %1$d</string>
+    <string name="st_db_ok">Локальная база: запись и чтение работают, ночей в базе: %1$d</string>
     <string name="st_db_fail">Локальная база: сбой \u2014 %1$s</string>
 
     <string name="st_light_ok">Датчик света: есть, сейчас %1$.0f люкс</string>
@@ -77,9 +113,9 @@
     <string name="st_battery_bad">Оптимизация батареи: включена. Система будет убивать фоновую работу.</string>
 
     <string name="st_notif_ok">Уведомления: разрешены</string>
-    <string name="st_notif_bad">Уведомления: запрещены</string>
+    <string name="st_notif_bad">Уведомления: заблокированы</string>
 
     <string name="st_verdict_ok">Всё нужное работает.</string>
     <string name="st_verdict_warn">Работает, но с ограничениями. Смотри предупреждения выше.</string>
-    <string name="st_verdict_fail">Есть блокирующие проблемы. Данные собираться не будут.</string>
+    <string name="st_verdict_fail">Найдены блокирующие проблемы. Данные собираться не будут.</string>
 </resources>

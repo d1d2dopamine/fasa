@@ -113,7 +113,7 @@ object SelfTest {
         }.getOrDefault(emptyList())
 
         if (sleep.isEmpty()) {
-            out += Line(Level.FAIL, context.getString(R.string.st_sleep_none))
+            out += Line(Level.WARN, context.getString(R.string.st_sleep_none))
         } else {
             out += Line(Level.OK, context.getString(R.string.st_sleep_found, sleep.size))
             newest = maxOfNullable(newest, sleep.maxOf { it.endTime })
@@ -135,7 +135,7 @@ object SelfTest {
 
         val samples = hr.flatMap { it.samples }
         if (samples.isEmpty()) {
-            out += Line(Level.FAIL, context.getString(R.string.st_hr_none))
+            out += Line(Level.WARN, context.getString(R.string.st_hr_none))
         } else {
             out += Line(Level.OK, context.getString(R.string.st_hr_found, samples.size))
             newest = maxOfNullable(newest, samples.maxOf { it.time })

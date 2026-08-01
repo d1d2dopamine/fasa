@@ -2,9 +2,45 @@
 <resources>
     <string name="app_name">Fasa</string>
 
+    <string name="tab_today">Today</string>
+    <string name="tab_drift">Drift</string>
+    <string name="tab_model">Model</string>
+    <string name="tab_data">Data</string>
+
     <string name="btn_permissions">Grant permissions</string>
     <string name="btn_sync">Sync now</string>
     <string name="btn_settings">Settings</string>
+    <string name="btn_alarm">Set target wake-up</string>
+    <string name="btn_refit">Rebuild model</string>
+
+    <string name="computing">Computing\u2026</string>
+    <string name="f_error">Could not compute a forecast.</string>
+    <string name="f_cold">Cold start. No real nights yet, so these are priors from population data. The bands will narrow as your own nights arrive.</string>
+
+    <string name="f_gate">Sleep gate opens</string>
+    <string name="f_onset">You will fall asleep around</string>
+    <string name="f_wake">Natural wake-up</string>
+    <string name="f_reverse">Latest onset for your alarm</string>
+    <string name="f_no_alarm">No target wake-up set yet.</string>
+
+    <string name="f_range">between %1$s and %2$s</string>
+    <string name="f_conf">confidence %1$d%%</string>
+    <string name="f_caffeine">Caffeine still active: %1$.0f mg</string>
+
+    <string name="f_drift">Drift: %1$s per day</string>
+    <string name="f_drift_hm">%1$d h %2$d min</string>
+    <string name="f_drift_m">%1$d min</string>
+    <string name="f_drift_hint">Your internal day is longer than 24 hours. Left alone, everything slides later. This is the mechanism behind delayed sleep phase syndrome, not a lack of discipline.</string>
+    <string name="f_week">If nothing intervenes</string>
+    <string name="f_week_row">In %1$d days: %2$s</string>
+
+    <string name="f_nights">Nights in the model: %1$d</string>
+    <string name="f_tau">Circadian period: %1$.2f h</string>
+    <string name="f_latency">Sleep latency: %1$.0f min</string>
+    <string name="f_rise">Pressure build-up constant: %1$.1f h</string>
+    <string name="f_fall">Pressure release constant: %1$.1f h</string>
+    <string name="f_particles">Hypotheses: %1$d, effective %2$d</string>
+    <string name="f_model_hint">The model keeps thousands of competing hypotheses about your body. Each real night reweights them. Effective count falling means the model is becoming certain.</string>
 
     <string name="hc_label">Health Connect</string>
     <string name="hc_ok">ready</string>
@@ -52,17 +88,17 @@
     <string name="st_perm_optional">optional, but the app will only see 30 days without it</string>
 
     <string name="st_sleep_found">Sleep: %1$d sessions in the last 7 days</string>
-    <string name="st_sleep_none">Sleep: no sessions in the last 7 days</string>
+    <string name="st_sleep_none">Sleep: no sessions yet. Expected on a fresh install \u2014 Health Connect does not backfill, so the first night appears tomorrow morning.</string>
     <string name="st_sleep_stages">Sleep stages: present in %1$d of %2$d sessions</string>
     <string name="st_sleep_no_stages">Sleep stages: absent. Deep and REM will be unavailable.</string>
 
     <string name="st_hr_found">Heart rate: %1$d samples in the last 24 hours</string>
     <string name="st_hr_none">Heart rate: no samples in the last 24 hours</string>
     <string name="st_hr_coverage_ok">Heart rate coverage: %1$d of 24 hours. Background measurement works.</string>
-    <string name="st_hr_coverage_low">Heart rate coverage: only %1$d of 24 hours. Looks like workout-only data \u2014 the nightly heart-rate minimum will not be usable.</string>
+    <string name="st_hr_coverage_low">Heart rate coverage: only %1$d of 24 hours. Either the link is young, or the watch only records during workouts.</string>
 
     <string name="st_spo2_found">Blood oxygen: %1$d records in the last 7 days</string>
-    <string name="st_spo2_none">Blood oxygen: no records. Not critical.</string>
+    <string name="st_spo2_none">Blood oxygen: no records. Band 9 Active has no SpO2 sensor, so this is normal.</string>
 
     <string name="st_freshness">Freshness: newest record is %1$s old</string>
     <string name="st_freshness_stale">Freshness: nothing new for %1$s. Sync is probably stuck.</string>
