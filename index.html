@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard</title>
+<meta name="theme-color" content="#171a21">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Dashboard">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icon.svg">
+<link rel="stylesheet" href="./style.css">
+<link rel="stylesheet" href="./retro.css">
+</head>
+<body>
+
+<div class="wrap">
+
+  <!-- ================= ШАПКА ================= -->
+  <header class="topbar">
+    <div class="ident">
+      <div class="avatar" id="avatar"></div>
+      <div class="ident-text">
+        <h1 id="userName">Сегодня</h1>
+        <p id="userMeta">Нажми N, чтобы записать мысль</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-capture" id="captureBtn">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Записать <kbd>N</kbd>
+      </button>
+      <button class="icon-btn sync-btn off" id="syncBtn" title="Синхронизация" aria-label="Синхронизация">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 9A6 6 0 0 0 6.3 8.2"/><path d="M6.3 15a6 6 0 0 0 11.4.8"/><path d="M17.5 5.5V9h-3.5"/><path d="M6.5 18.5V15H10"/></svg>
+        <span class="sync-dot"></span>
+      </button>
+      <button class="icon-btn" id="settingsBtn" title="Настройки" aria-label="Настройки">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7.5 19.4l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3 14.6a2 2 0 1 1 0-4 1.6 1.6 0 0 0 1.1-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 9.6 3H10a2 2 0 1 1 4 0 1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1.4Z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- заботливое сообщение: гиперфокус, ошибки и прочее -->
+  <div class="banner hidden" id="banner">
+    <span id="bannerText"></span>
+    <button class="banner-x" id="bannerClose" aria-label="Скрыть">&times;</button>
+  </div>
+
+  <!-- ================= СЕЙЧАС ================= -->
+  <section class="card now" id="nowCard">
+
+    <div class="now-top">
+      <span class="eyebrow">Сейчас</span>
+      <div class="energy" role="group" aria-label="Сколько сейчас сил">
+        <span class="energy-lbl">Сил:</span>
+        <button class="chip" data-energy="low">мало</button>
+        <button class="chip" data-energy="mid">средне</button>
+        <button class="chip" data-energy="high">много</button>
+      </div>
+    </div>
+
+    <div class="now-body">
+      <div class="now-text">
+        <h2 id="nowTask">Задач пока нет</h2>
+        <p class="now-step" id="nowStep"></p>
+      </div>
+
+      <div class="ring-wrap" id="ringWrap">
+        <svg viewBox="0 0 80 80" width="80" height="80" aria-hidden="true">
+          <circle class="ring-bg" cx="40" cy="40" r="34"></circle>
+          <circle class="ring-fg" id="ringFg" cx="40" cy="40" r="34"></circle>
+        </svg>
+        <span class="ring-label" id="ringLabel">5:00</span>
+      </div>
+    </div>
+
+    <div class="now-actions">
+      <button class="btn btn-primary btn-lg" id="btnStart">Пять минут</button>
+      <button class="btn" id="btnDone">Сделано</button>
+      <button class="btn btn-ghost" id="btnOther">Другую</button>
+      <button class="btn btn-ghost" id="btnSnooze">Не сегодня</button>
+    </div>
+
+    <p class="now-hint" id="nowHint">Можно бросить через пять минут. Это разрешено.</p>
+  </section>
+
+  <!-- ================= СДЕЛАНО / РИТМ ================= -->
+  <div class="grid-2">
+
+    <section class="card">
+      <div class="card-head"><h2>Сделано сегодня</h2></div>
+      <div class="today-nums">
+        <div><span class="tnum" id="tCommits">0</span><span class="tlbl">коммитов</span></div>
+        <div><span class="tnum" id="tTasks">0</span><span class="tlbl">задач</span></div>
+        <div><span class="tnum" id="tMinutes">0</span><span class="tlbl">минут в фокусе</span></div>
+      </div>
+      <ul class="done-list" id="doneList"></ul>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Ритм</h2>
+        <span class="muted small" id="freezeInfo"></span>
+      </div>
+      <p class="rhythm-num"><strong id="rhythmCount">0</strong> <span class="muted">дней из последних 30</span></p>
+      <div class="dots" id="dots"></div>
+      <div class="challenge" id="challenge"></div>
+    </section>
+
+  </div>
+
+  <!-- ================= БЛИЖАЙШИЙ ЭТАП ================= -->
+  <section class="card goal">
+    <div class="goal-head">
+      <div>
+        <span class="eyebrow" id="goalEyebrow">Ближайший этап</span>
+        <h2 id="msTitle">Этапов нет</h2>
+        <p class="muted" id="msUnits">Добавь первый этап — близкая точка работает лучше далёкой цели</p>
+      </div>
+      <div class="ms-count">
+        <span class="ms-num" id="msNum">—</span>
+        <span class="ms-lbl" id="msLbl">дней</span>
+      </div>
+    </div>
+
+    <div class="drain" title="Остаток времени"><div class="drain-fill" id="drain"></div></div>
+
+    <ul class="ms-list" id="msList"></ul>
+
+    <form class="add-row" id="msForm">
+      <input type="text" id="msText" placeholder="Этап: пробник, олимпиада, подача документов" autocomplete="off">
+      <input type="date" id="msDate" aria-label="Дата этапа" placeholder="Дата: дд.мм.гггг">
+      <button type="submit" class="btn btn-ghost">Добавить</button>
+    </form>
+  </section>
+
+  <!-- ================= ВХОДЯЩИЕ ================= -->
+  <section class="card hidden" id="inboxCard">
+    <div class="card-head">
+      <h2>Входящие</h2>
+      <span class="muted small">Разберёшь когда-нибудь. Или не разберёшь</span>
+    </div>
+    <ul class="inbox" id="inboxList"></ul>
+  </section>
+
+  <!-- ================= ВСЕ ЗАДАЧИ (скрыто) ================= -->
+  <section class="card">
+    <button class="disclosure" id="tasksToggle" aria-expanded="false">
+      <span>Все задачи <span class="badge" id="tasksCount">0</span></span>
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+
+    <div class="hidden" id="tasksPanel">
+      <ul class="tasks" id="taskList"></ul>
+
+      <form class="task-form" id="taskForm">
+        <input type="text" id="tText" placeholder="Что надо сделать" autocomplete="off">
+        <input type="text" id="tStep" placeholder="Первый шаг: открыть файл, найти страницу…" autocomplete="off">
+        <div class="task-form-row">
+          <select id="tEnergy" aria-label="Сколько сил нужно">
+            <option value="low">Пять минут</option>
+            <option value="mid" selected>Полчаса</option>
+            <option value="high">Надо разгоняться</option>
+          </select>
+          <input type="number" id="tEstimate" min="1" max="600" placeholder="Оценка, мин" aria-label="Сколько займёт, минут">
+          <select id="tRepeat" aria-label="Повторять">
+            <option value="">без повтора</option>
+            <option value="day">каждый день</option>
+            <option value="3d">раз в три дня</option>
+            <option value="week">раз в неделю</option>
+            <option value="2w">раз в две недели</option>
+            <option value="month">раз в месяц</option>
+          </select>
+          <button type="submit" class="btn btn-primary">Добавить</button>
+        </div>
+        <textarea id="tNote" class="task-note" rows="2" placeholder="Заметка: ссылки, обрывки мыслей — необязательно"></textarea>
+        <p class="muted small" id="estimateHint">Оценка необязательна. Но если ставить — сайт посчитает, во сколько раз ты обычно ошибаешься</p>
+      </form>
+
+      <div class="archive" id="archiveBox"></div>
+    </div>
+  </section>
+
+  <!-- ================= НАБЛЮДЕНИЯ ================= -->
+  <section class="card">
+    <div class="card-head">
+      <h2>Наблюдения</h2>
+      <span class="muted small">Считается по твоей истории, никуда не уходит</span>
+    </div>
+    <ul class="insights" id="insights"></ul>
+  </section>
+
+  <!-- ================= ЗАБЫТОЕ / РЕПОЗИТОРИИ ================= -->
+  <div class="grid-2">
+
+    <section class="card">
+      <div class="card-head"><h2>Забытое</h2></div>
+      <ul class="forgot" id="forgotList"></ul>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Репозитории</h2></div>
+      <ul class="repos" id="repos"></ul>
+    </section>
+
+  </div>
+
+  <!-- ================= ГОД ================= -->
+  <section class="card">
+    <div class="heat-head">
+      <span>Год целиком <span class="muted small" id="heatSummary"></span></span>
+    </div>
+    <div id="heatPanel">
+      <div class="heat-scroll"><div class="heat" id="heat"></div></div>
+    </div>
+  </section>
+
+</div>
+
+<!-- ================= БЫСТРАЯ ЗАПИСЬ ================= -->
+<div class="overlay hidden" id="captureOverlay">
+  <form class="capture" id="captureForm">
+    <input type="text" id="captureInput" placeholder="Что в голове?" autocomplete="off">
+    <p class="capture-hint">Enter — сохранить · Esc — закрыть</p>
+    <p class="capture-hint">На главном экране: пробел — таймер, D — сделано, S — не сегодня, O — другую</p>
+  </form>
+</div>
+
+<!-- ================= НАСТРОЙКИ ================= -->
+<div class="overlay hidden" id="overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-head">
+      <h2 id="modalTitle">Настройки</h2>
+      <button class="icon-btn" id="closeBtn" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+
+    <form id="settingsForm">
+
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab on" data-pane="paneMain">Основное</button>
+        <button type="button" class="tab" data-pane="paneLook">Вид</button>
+        <button type="button" class="tab" data-pane="paneDev">Устройства</button>
+        <button type="button" class="tab" data-pane="paneSync">Синхронизация</button>
+        <button type="button" class="tab" data-pane="paneData">Данные</button>
+      </div>
+
+      <!-- ---- основное ---- -->
+      <div class="pane on" id="paneMain">
+        <label class="field"><span>Ник на GitHub</span><input type="text" id="fLogin" placeholder="octocat" autocomplete="off"></label>
+        <label class="field"><span>Вуз или большая цель</span><input type="text" id="fUni" placeholder="MIT, EECS" autocomplete="off"></label>
+        <label class="field"><span>Длина короткого старта, минут</span><input type="number" id="fStart" min="1" max="60" placeholder="5"></label>
+        <label class="field"><span>Напоминать о перерыве через, минут</span><input type="number" id="fBreak" min="20" max="240" placeholder="90"></label>
+        <label class="check-field"><input type="checkbox" id="fSound"><span>Звук при завершении задачи</span></label>
+      </div>
+
+      <!-- ---- вид ---- -->
+      <div class="pane" id="paneLook">
+        <label class="field"><span>Язык</span>
+          <select id="fLang">
+            <option value="en">English</option>
+            <option value="ru">Русский</option>
+          </select>
+        </label>
+        <label class="check-field"><input type="checkbox" id="fRotate"><span>Менять цвет каждую неделю</span></label>
+        <p class="muted small">Смена языка перезагружает страницу. Данные при этом не трогаются.</p>
+      </div>
+
+      <!-- ---- устройства ---- -->
+      <div class="pane" id="paneDev">
+      <div class="sync-box">
+        <div class="sync-line">
+          <strong>Устройства</strong>
+          <span class="muted small">цвет метки у записей</span>
+        </div>
+        <p class="muted small">У каждой задачи, этапа и записи слева точка — того цвета, где её добавили. Имя можно менять.</p>
+        <div id="deviceList"></div>
+        <div class="sync-actions">
+          <button type="button" class="btn btn-ghost" id="claimBtn">Пометить старые записи этим устройством</button>
+        </div>
+      </div>
+      </div>
+
+      <!-- ---- данные ---- -->
+      <div class="pane" id="paneData">
+      <div class="sync-box">
+        <div class="sync-line">
+          <strong>Копия файлом</strong>
+          <span class="muted small">на случай всего</span>
+        </div>
+        <p class="muted small">Скачанный файл не зависит ни от браузера, ни от токена, ни от GitHub. Загрузка заменяет всё, что сейчас на этом устройстве.</p>
+        <div class="sync-actions">
+          <button type="button" class="btn" id="expBtn">Скачать копию</button>
+          <button type="button" class="btn btn-ghost" id="impBtn">Загрузить копию</button>
+          <input type="file" id="impFile" accept="application/json,.json" class="hidden">
+        </div>
+      </div>
+      </div>
+
+      <!-- ---- синхронизация ---- -->
+      <div class="pane" id="paneSync">
+      <div class="sync-box">
+        <div class="sync-line">
+          <strong>Синхронизация устройств</strong>
+          <span class="muted small" id="syncStatus">Выключена</span>
+        </div>
+        <p class="muted small">Токен GitHub с одним правом <code>gist</code>. Данные лежат в твоём приватном gist. Тот же токен вставь на телефоне.</p>
+        <input type="password" id="fToken" placeholder="ghp_…" autocomplete="off" spellcheck="false">
+        <div class="sync-actions">
+          <button type="button" class="btn" id="syncConnect">Подключить</button>
+          <button type="button" class="btn btn-ghost" id="syncNow">Синхронизировать</button>
+          <button type="button" class="btn btn-ghost" id="syncOff">Отключить</button>
+          <button type="button" class="btn btn-ghost" id="syncCheck">Проверить</button>
+        </div>
+        <pre class="sync-diag hidden" id="syncDiag"></pre>
+        <p class="muted small" id="buildInfo">сборка —</p>
+        <p class="muted small"><a href="./check.html">Открыть страницу проверки</a> — работает, даже если дашборд сломан</p>
+      </div>
+      </div>
+
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" id="resetBtn">Сбросить всё</button>
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast hidden" id="toast"></div>
+
+<script src="./i18n.js"></script>
+<script src="./stats.js"></script>
+<script src="./sync.js"></script>
+<script src="./app.js"></script>
+<script>
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("./sw.js").catch(function () {});
+    });
+  }
+</script>
+</body>
+</html>
