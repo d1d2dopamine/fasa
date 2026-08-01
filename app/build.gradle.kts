@@ -1,3 +1,9 @@
+// Inside a Kotlin DSL build script the name `java` resolves to the Gradle Java
+// extension, not to the JDK package, so java.time.* must be imported.
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -12,10 +18,10 @@ plugins {
 // local build gets zero and the sha "local".
 val vespianRun: Int = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
 val vespianSha: String = (System.getenv("GITHUB_SHA") ?: "local").take(7)
-val vespianBuiltAt: String = java.time.format.DateTimeFormatter
+val vespianBuiltAt: String = DateTimeFormatter
     .ofPattern("yyyy-MM-dd HH:mm 'UTC'")
-    .withZone(java.time.ZoneOffset.UTC)
-    .format(java.time.Instant.now())
+    .withZone(ZoneOffset.UTC)
+    .format(Instant.now())
 
 android {
     namespace = "dev.vespian"
@@ -58,10 +64,11 @@ android {
 
     buildTypes {
         debug {
-            isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = false
         }
         release {
+            signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = false
         }
     }
@@ -74,6 +81,12 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
 }
 
 dependencies {
@@ -82,8 +95,6 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.9.3")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
 
-    // Compose. The BOM pins every compose artifact to one compatible set,
-    // so the individual artifacts below carry no version on purpose.
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")
@@ -100,10 +111,7 @@ dependencies {
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
 
-    // Encrypted storage for the Telegram token. Alpha is the only channel this
-    // library has shipped in for years; the API used here is stable.
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
-
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 }
