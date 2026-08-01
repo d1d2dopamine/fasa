@@ -159,7 +159,7 @@
     <string name="f_habit_unknown">Ночей пока мало, привычку засиживаться после окна модель ещё не выучила.</string>
     <!-- Экспорт -->
     <string name="btn_export">Скачать историю</string>
-    <string name="export_hint">Один файл JSON со всеми ночами, ответами и параметрами модели. Текст внутри ан���лийский, чтобы его понял врач или нейросеть.</string>
+    <string name="export_hint">Один файл JSON со всеми ночами, ответами и параметрами модели. Текст внутри английский, чтобы его понял врач или нейросеть.</string>
     <string name="export_running">Собираю файл...</string>
     <string name="export_done">История сохранена.</string>
     <string name="export_error">Не удалось записать файл.</string>
@@ -188,11 +188,11 @@
     <string name="ob_health">Health Connect</string>
     <string name="ob_health_body">Сон и пульс с браслета.</string>
     <string name="ob_notif">Уведомления</string>
-    <string name="ob_notif_body">Нужны ��ля датчика света и предупреждений о застое данных.</string>
+    <string name="ob_notif_body">Нужны для датчика света и предупреждений о застое данных.</string>
     <string name="ob_battery">Оптимизация батареи</string>
     <string name="ob_battery_body">Выключи её, иначе ежечасная синхронизация будет убита.</string>
     <string name="ob_autostart">Автозапуск</string>
-    <string name="ob_autostart_body">На realme и ColorOS его надо вклю��и��ь вручную в настройках системы.</string>
+    <string name="ob_autostart_body">На realme и ColorOS его надо включить вручную в настройках системы.</string>
     <string name="ob_open_settings">Открыть настройки</string>
     <string name="ob_grant">Выдать</string>
     <string name="ob_allow">Разрешить</string>

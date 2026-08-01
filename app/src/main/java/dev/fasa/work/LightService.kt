@@ -129,11 +129,18 @@ class LightService : Service(), SensorEventListener {
                     delay(IDLE_MS)
                     continue
                 }
-                val waiting = runCatching { Bot.waiting(app) }.getOrDefault(false)
-                // A held connection returns the instant a button is tapped, so
-                // this call itself is the wait.
-                runCatching { Bot.tick(app, longPoll = waiting) }
-                delay(if (waiting) HOLD_GAP_MS else IDLE_MS)
+                // The connection is always held now. Telegram answers the
+                // instant a command or a tap arrives, so a reply takes about a
+                // second instead of waiting for the next timer.
+                val began = System.currentTimeMillis()
+                val got = runCatching { Bot.tick(app, longPoll = true) }.getOrDefault(false)
+                val took = System.currentTimeMillis() - began
+                // A healthy held connection either returns something or sits
+                // there for tens of seconds. Returning instantly with nothing
+                // means the network refused it, so back off instead of
+                // spinning on a dead link.
+                val dead = !got && took < FAST_TICK_MS
+                delay(if (dead) BACKOFF_MS else HOLD_GAP_MS)
             }
         }
     }
@@ -219,6 +226,12 @@ class LightService : Service(), SensorEventListener {
 
         // Between two held connections. Just enough not to spin on an error.
         private const val HOLD_GAP_MS = 1000L
+
+        // A poll that comes back empty faster than this never reached Telegram.
+        private const val FAST_TICK_MS = 5_000L
+
+        // How long to wait after a failed poll before trying again.
+        private const val BACKOFF_MS = 60_000L
 
         fun available(context: Context): Boolean {
             val manager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager

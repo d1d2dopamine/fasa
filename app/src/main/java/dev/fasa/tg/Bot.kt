@@ -41,20 +41,23 @@ object Bot {
     // nothing.
     private const val WAIT_WINDOW_MS = 30L * 60 * 1000
 
-    suspend fun tick(context: Context, longPoll: Boolean = false) = withContext(Dispatchers.IO) {
-        if (!Secrets.configured(context)) return@withContext
+    // Returns true when at least one update was read, so the caller can tell a
+    // useful tick from an empty one and back off when the network is down.
+    suspend fun tick(context: Context, longPoll: Boolean = false): Boolean = withContext(Dispatchers.IO) {
+        if (!Secrets.configured(context)) return@withContext false
         val token = Secrets.token(context)
         val chat = Secrets.chatId(context)
 
         // Order matters. Drain first so a queued question is not duplicated,
         // then read replies, then decide whether anything new is due.
         drain(context, token, chat)
-        poll(context, token, chat, longPoll)
+        val got = poll(context, token, chat, longPoll)
         // A refit that was postponed as too soon happens here.
         runCatching { Commands.flushRefit(context) }
         maybeMorning(context)
         maybeEvening(context)
         drain(context, token, chat)
+        got
     }
 
     // True while a question is on screen and recent. The caller uses this to
@@ -155,7 +158,7 @@ object Bot {
         token: String,
         chat: String,
         longPoll: Boolean = false,
-    ) {
+    ): Boolean {
         val db = Db.get(context)
         val offset = db.meta().get(K_OFFSET)?.toLongOrNull() ?: 0L
         val (updates, fail) = Telegram.getUpdates(
@@ -163,7 +166,7 @@ object Bot {
             offset,
             if (longPoll) Telegram.LONG_POLL_SEC else 0,
         )
-        if (fail != null || updates.isEmpty()) return
+        if (fail != null || updates.isEmpty()) return false
 
         var maxId = offset
         for (u in updates) {
@@ -179,6 +182,7 @@ object Bot {
             runCatching { Commands.handleMessage(context, msg) }
         }
         db.meta().put(Meta(K_OFFSET, maxId.toString()))
+        return true
     }
 
     // callback_data is "m:<date>:<value>" for mood and "c:<date>:<value>" for mugs.
