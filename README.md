@@ -1,9 +1,9 @@
-# Fasa
+# Vespian
 
 A predictive sleep model for **Delayed Sleep Phase Syndrome (DSPS)** and ADHD.
 
 Most sleep apps try to force a fixed bedtime. That works for neurotypical people
-and burns out everyone else. Fasa does the opposite: it does not tell you when
+and burns out everyone else. Vespian does the opposite: it does not tell you when
 you *should* sleep. It predicts when you **will** be able to fall asleep, and
 how confident it is about that prediction.
 
@@ -23,7 +23,7 @@ No server. No account. No cloud. Everything runs on the phone.
 
 A sleep model with three nights of data is guessing. A sleep model with sixty
 nights is not. Most apps hide this and present both with the same authority.
-Fasa never shows a bare time. It shows a time, a range, and how much it trusts
+Vespian never shows a bare time. It shows a time, a range, and how much it trusts
 itself.
 
 | Confidence | What you get |
@@ -67,7 +67,7 @@ No local toolchain required. This repository builds itself on GitHub Actions.
 1. Fork or copy this repository. Keep it **public** — Actions minutes are free
    and unlimited for public repositories.
 2. Push. The workflow runs automatically.
-3. Open the **Actions** tab, pick the run, download the `fasa-apk` artifact.
+3. Open the **Actions** tab, pick the run, download the `vespian-apk` artifact.
 
 The Gradle wrapper is intentionally absent. Its `.jar` is a binary and cannot be
 uploaded through the GitHub web editor on a phone, which is the whole point of
@@ -88,7 +88,7 @@ English and Russian. Switch in Settings, or leave it on system default.
 ## Project layout
 
 ```
-app/src/main/java/dev/fasa/
+app/src/main/java/dev/vespian/
   MainActivity.kt          status screen
   SettingsActivity.kt      language, self-test
   diag/SelfTest.kt         end-to-end diagnostics

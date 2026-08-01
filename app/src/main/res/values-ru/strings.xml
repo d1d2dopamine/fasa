@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Фаза</string>
+    <string name="app_name">Веспиан</string>
 
     <string name="tab_today">Сегодня</string>
     <string name="tab_drift">Дрейф</string>
@@ -139,7 +139,7 @@
     <string name="tg_test_token">Токен отклонён: %1$s</string>
     <string name="tg_test_chat">Токен верный, чат не принял: %1$s. Открой чат с ботом и нажми Start.</string>
     <string name="tg_test_ok">Отправлено. Проверь чат с ботом.</string>
-    <string name="tg_test_text">fasa подключена.</string>
+    <string name="tg_test_text">Веспиан подключён.</string>
     <string name="tg_saved">Записал</string>
     <string name="tg_mood_done">Самочувствие: %1$s</string>
     <string name="tg_mugs_done">Кофе: %1$d кружек</string>
@@ -178,12 +178,12 @@
     <string name="ch_service_desc">Держит замеры освещённости живыми в фоне.</string>
     <string name="ch_alert">Предупреждения</string>
     <string name="ch_alert_desc">Сообщает, когда браслет перестал присылать данные.</string>
-    <string name="nt_light_title">fasa меряет свет</string>
+    <string name="nt_light_title">Веспиан меряет свет</string>
     <string name="nt_light_waiting">Жду первый замер</string>
     <string name="nt_light_value">%1$d люкс, замеров за сутки: %2$d</string>
     <string name="nt_stale_title">Нет новых данных</string>
     <string name="nt_stale_text">Ничего не приходило %1$d часов. Открой Mi Fitness для синхронизации.</string>
-    <string name="ob_title">Настройка fasa</string>
+    <string name="ob_title">Настройка Веспиана</string>
     <string name="ob_subtitle">Четыре разрешения. Без них приложение не сможет работать само.</string>
     <string name="ob_health">Health Connect</string>
     <string name="ob_health_body">Сон и пульс с браслета.</string>
@@ -198,7 +198,7 @@
     <string name="ob_allow">Разрешить</string>
     <string name="ob_done">Готово</string>
 
-    <string name="tgb_start">fasa bot is running. Choose the chat language.</string>
+    <string name="tgb_start">Vespian bot is running. Choose the chat language.</string>
     <string name="tgb_lang_ask">Язык чата?</string>
     <string name="tgb_lang_set">Язык сохранён.</string>
     <string name="tgb_help">Команды:\n/help - этот текст\n/lang - язык чата\n/mode - без рук или ручной\n/forecast - окно сна прямо сейчас\n/status - доходят ли данные\n\nРежим без рук: сон берётся с браслета, время отхода ко сну - по погасшему экрану, кофе - по одному вопросу утром. Нажимать ничего не нужно.\n\nРучной режим: добавляет кнопки \"ложусь\", \"встал\" и \"кофе +1\". Нужен тем, у кого нет браслета, или на ночь, когда автоматика ошиблась.</string>
@@ -248,7 +248,7 @@
     <string name="ln_hr_min">Минимум пульса</string>
     <string name="ln_hr_mean">Средний пульс</string>
     <string name="ln_source">Источник</string>
-    <string name="ln_imported">Занесено в fasa</string>
+    <string name="ln_imported">Занесено в Веспиан</string>
     <string name="ln_no_phases">не измерялись</string>
     <string name="ln_pct_note">Проценты - доля от времени сна, как их считает браслет.</string>
     <string name="ln_range">%1$s - %2$s</string>
@@ -263,6 +263,48 @@
     <string name="tgb_cmd_last">Замеры прошлой ночи</string>
     <string name="tgb_last_none">Записей пока нет.</string>
     <string name="tgb_phases_none">Фазы: не измерялись</string>
-    <string name="nt_down_title">fasa была остановлена системой</string>
-    <string name="nt_down_text">Фоновая работа была заморожена %1$d минут, ответы в Telegram приходили с опозданием. Разрешите автозапуск и работу в фоне для fasa в системных настройках батареи.</string>
+    <string name="nt_down_title">Веспиан был остановлен системой</string>
+    <string name="nt_down_text">Фоновая работа была заморожена %1$d минут, ответы в Telegram приходили с опозданием. Разрешите автозапуск и работу в фоне для Веспиана в системных настройках батареи.</string>
+    <string name="save">Сохранить</string>
+    <string name="saved">Сохранено</string>
+    <string name="settings_group_app">Приложение</string>
+    <string name="settings_group_sleep">Сон</string>
+    <string name="settings_group_telegram">Telegram</string>
+    <string name="settings_group_data">Данные и диагностика</string>
+    <string name="settings_group_about">О программе</string>
+    <string name="settings_alarm">Целевое время подъёма</string>
+    <string name="settings_alarm_hint">Время, к которому надо проснуться. Обратный будильник отсчитывает от него назад и говорит, когда крайний срок гасить свет. Оставьте пустым, если жёсткого подъёма нет.</string>
+    <string name="settings_alarm_field">ЧЧ:ММ</string>
+    <string name="settings_alarm_bad">Нужен 24-часовой формат, например 07:30.</string>
+    <string name="settings_alarm_clear">Очистить</string>
+    <string name="settings_coffee">Кофе</string>
+    <string name="settings_coffee_hint">Кофеин в одной вашей кружке. Модель сдвигает из-за него окно сна позже. Растворимый около 130 мг, заварной около 190.</string>
+    <string name="settings_coffee_field">мг на кружку</string>
+    <string name="settings_coffee_bad">Введите значение от 20 до 400.</string>
+    <string name="settings_coffee_instant">Растворимый</string>
+    <string name="settings_coffee_brewed">Заварной</string>
+    <string name="settings_about">О Веспиане</string>
+    <string name="about_version">Версия</string>
+    <string name="about_build">Сборка</string>
+    <string name="about_commit">Коммит</string>
+    <string name="about_built_at">Собрано</string>
+    <string name="about_package">Пакет</string>
+    <string name="about_license">Лицензия</string>
+    <string name="about_repo">Исходный код</string>
+    <string name="about_service">Фоновая служба</string>
+    <string name="about_svc_never">Ни разу не запускалась на этом телефоне.</string>
+    <string name="about_svc_ok">Работает, %1$s без перерыва.</string>
+    <string name="about_svc_stale">Не работает. Последний признак жизни %1$s назад.</string>
+    <string name="about_svc_down">Система замораживала её: %1$s.</string>
+    <string name="about_svc_down_never">Система её ни разу не замораживала.</string>
+    <string name="about_copy">Скопировать сведения</string>
+    <string name="about_copied">Скопировано в буфер обмена.</string>
+    <string name="log_title">Отметить</string>
+    <string name="log_coffee">Кофе +1</string>
+    <string name="log_coffee_n">Кофе сегодня: %1$d</string>
+    <string name="log_undo">Отменить</string>
+    <string name="log_mood">Как самочувствие?</string>
+    <string name="log_mood_set">Записано: %1$s</string>
+    <string name="log_mood_none">Сегодня не отмечено</string>
+    <string name="log_hint">Работает без интернета. Бот спрашивает то же самое.</string>
 </resources>

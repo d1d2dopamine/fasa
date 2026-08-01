@@ -5,21 +5,37 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+// Build identity.
+//
+// On GitHub Actions the run number becomes the build number, so every artifact
+// is distinguishable and every new build installs over the previous one. A
+// local build gets zero and the sha "local".
+val vespianRun: Int = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
+val vespianSha: String = (System.getenv("GITHUB_SHA") ?: "local").take(7)
+val vespianBuiltAt: String = java.time.format.DateTimeFormatter
+    .ofPattern("yyyy-MM-dd HH:mm 'UTC'")
+    .withZone(java.time.ZoneOffset.UTC)
+    .format(java.time.Instant.now())
+
 android {
-    namespace = "dev.fasa"
+    namespace = "dev.vespian"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "dev.fasa"
+        applicationId = "dev.vespian"
         minSdk = 28
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 2 + vespianRun
+        versionName = "0.2." + vespianRun
         resourceConfigurations += listOf("en", "ru")
+
+        buildConfigField("String", "GIT_SHA", "\"" + vespianSha + "\"")
+        buildConfigField("String", "BUILD_AT", "\"" + vespianBuiltAt + "\"")
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     signingConfigs {
@@ -33,10 +49,10 @@ android {
         // The key has no security value: this app is sideloaded, never
         // published, and holds no secrets of its own.
         getByName("debug") {
-            storeFile = file("fasa-debug.jks")
-            storePassword = "fasapass"
-            keyAlias = "fasa"
-            keyPassword = "fasapass"
+            storeFile = file("vespian-debug.jks")
+            storePassword = "vespianpass"
+            keyAlias = "vespian"
+            keyPassword = "vespianpass"
         }
     }
 

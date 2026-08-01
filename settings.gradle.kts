@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "fasa"
+rootProject.name = "vespian"
 include(":app")
