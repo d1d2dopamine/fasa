@@ -173,7 +173,9 @@ object SelfTest {
         newest?.let {
             val hoursOld = ChronoUnit.HOURS.between(it, now)
             val human = if (hoursOld < 48) "$hoursOld h" else "${hoursOld / 24} d"
-            out += if (hoursOld <= 18) {
+            // Same threshold as the stale-data warning in the worker, so the
+            // two never disagree about what counts as fresh.
+            out += if (hoursOld <= 30) {
                 Line(Level.OK, context.getString(R.string.st_freshness, human))
             } else {
                 Line(Level.WARN, context.getString(R.string.st_freshness_stale, human))
@@ -204,7 +206,19 @@ object SelfTest {
             Line(Level.WARN, context.getString(R.string.st_light_none))
         }
 
-        // 9. Battery optimisation
+        // 9. Telegram
+        out += if (!dev.fasa.tg.Secrets.configured(context)) {
+            Line(Level.WARN, context.getString(R.string.st_tg_none))
+        } else {
+            when (val me = dev.fasa.tg.Telegram.getMe(dev.fasa.tg.Secrets.token(context))) {
+                is dev.fasa.tg.Telegram.Reply.Ok ->
+                    Line(Level.OK, context.getString(R.string.st_tg_ok))
+                is dev.fasa.tg.Telegram.Reply.Fail ->
+                    Line(Level.WARN, context.getString(R.string.st_tg_fail, me.message))
+            }
+        }
+
+        // 10. Battery optimisation
         val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         val exempt = pm.isIgnoringBatteryOptimizations(context.packageName)
         out += if (exempt) {

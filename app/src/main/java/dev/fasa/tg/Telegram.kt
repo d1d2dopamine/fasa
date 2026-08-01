@@ -78,12 +78,23 @@ object Telegram {
         chatId: String,
         text: String,
         keyboard: JSONArray? = null,
+        replyKeyboard: JSONArray? = null,
     ): Reply {
         val body = JSONObject()
         body.put("chat_id", chatId)
         body.put("text", text)
         if (keyboard != null) {
             body.put("reply_markup", JSONObject().put("inline_keyboard", keyboard))
+        } else if (replyKeyboard != null) {
+            // The persistent keyboard sits under the input field, so the common
+            // actions are one tap away without remembering any command.
+            body.put(
+                "reply_markup",
+                JSONObject()
+                    .put("keyboard", replyKeyboard)
+                    .put("resize_keyboard", true)
+                    .put("is_persistent", true),
+            )
         }
         return call(token, "sendMessage", body)
     }
@@ -94,6 +105,14 @@ object Telegram {
         for ((label, data) in pairs) {
             row.put(JSONObject().put("text", label).put("callback_data", data))
         }
+        return row
+    }
+
+    // One row of the persistent keyboard. These buttons send their own label
+    // back as an ordinary message, so the label is the protocol.
+    fun textRow(vararg labels: String): JSONArray {
+        val row = JSONArray()
+        for (l in labels) row.put(JSONObject().put("text", l))
         return row
     }
 
@@ -150,4 +169,18 @@ object Telegram {
         )
 
     suspend fun getMe(token: String): Reply = call(token, "getMe", JSONObject())
+
+    // Registers the slash commands, which is what fills the hint list Telegram
+    // shows while typing. BotFather does the same thing by hand; doing it from
+    // the app means the list can never drift from the code.
+    suspend fun setMyCommands(
+        token: String,
+        commands: List<Pair<String, String>>,
+    ): Reply {
+        val arr = JSONArray()
+        for ((name, description) in commands) {
+            arr.put(JSONObject().put("command", name).put("description", description))
+        }
+        return call(token, "setMyCommands", JSONObject().put("commands", arr))
+    }
 }

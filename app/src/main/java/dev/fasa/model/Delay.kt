@@ -83,7 +83,11 @@ object Delay {
             // That is the decision to stop, and it is compared with the bare
             // gate. Fallback: sleep start compared with gate plus latency, so
             // both branches measure the same thing.
-            val bed = Screen.bedtimeBefore(screenEvents, night.sleepStart)
+            // A hand typed night never has a screen event behind it, and its
+            // sleep start is a guess with an assumed latency inside. Treating
+            // it as measured would make the habit look perfectly steady.
+            val typed = night.source.startsWith("manual")
+            val bed = if (typed) null else Screen.bedtimeBefore(screenEvents, night.sleepStart)
             val real = bed != null
             if (real) measured += 1
             val observed = if (real) Engine.hourOf(bed!!, offset) else start

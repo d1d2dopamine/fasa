@@ -93,6 +93,8 @@ private fun SettingsScreen(onBack: () -> Unit) {
     var language by remember {
         mutableStateOf(AppCompatDelegate.getApplicationLocales().toLanguageTags())
     }
+    // Mirrors the /mode command in the chat: same flag, two places to set it.
+    var manualMode by remember { mutableStateOf(Prefs.manualMode(context)) }
     var running by remember { mutableStateOf(false) }
     var refitting by remember { mutableStateOf(false) }
     var confirmRefit by remember { mutableStateOf(false) }
@@ -144,6 +146,23 @@ private fun SettingsScreen(onBack: () -> Unit) {
                     AppCompatDelegate.setApplicationLocales(
                         LocaleListCompat.forLanguageTags("ru")
                     )
+                }
+            }
+
+            Section(stringResource(R.string.settings_mode)) {
+                Text(
+                    stringResource(R.string.settings_mode_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                LanguageRow(R.string.tgb_mode_auto, !manualMode) {
+                    manualMode = false
+                    scope.launch { Store.saveMode(context, false) }
+                }
+                LanguageRow(R.string.tgb_mode_manual, manualMode) {
+                    manualMode = true
+                    scope.launch { Store.saveMode(context, true) }
                 }
             }
 

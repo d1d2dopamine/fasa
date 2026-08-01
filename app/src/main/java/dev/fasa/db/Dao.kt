@@ -21,6 +21,12 @@ interface NightDao {
 
     @Query("SELECT MAX(sleepEnd) FROM nights")
     suspend fun lastSleepEnd(): Long?
+
+    // The newest night that has actually finished. A row dated in the future,
+    // whether from a wrong clock or a hand typed entry, must not be shown as
+    // the last measurement.
+    @Query("SELECT * FROM nights WHERE sleepEnd <= :before ORDER BY sleepEnd DESC LIMIT 1")
+    suspend fun lastEnded(before: Long): Night?
 }
 
 @Dao

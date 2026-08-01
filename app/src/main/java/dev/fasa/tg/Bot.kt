@@ -7,6 +7,8 @@ import dev.fasa.db.Db
 import dev.fasa.db.Meta
 import dev.fasa.model.Engine
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -48,6 +50,8 @@ object Bot {
         // then read replies, then decide whether anything new is due.
         drain(context, token, chat)
         poll(context, token, chat, longPoll)
+        // A refit that was postponed as too soon happens here.
+        runCatching { Commands.flushRefit(context) }
         maybeMorning(context)
         maybeEvening(context)
         drain(context, token, chat)
@@ -61,7 +65,7 @@ object Bot {
         return System.currentTimeMillis() - at in 0..WAIT_WINDOW_MS
     }
 
-    private suspend fun markAsked(context: Context) {
+    suspend fun markAsked(context: Context) {
         Db.get(context).meta().put(Meta(K_ASKED_AT, System.currentTimeMillis().toString()))
     }
 
@@ -73,13 +77,26 @@ object Bot {
 
     // Messages are queued in the database, not sent inline. No connection, a
     // rate limit or a flat battery then costs nothing: the message waits.
-    suspend fun enqueue(context: Context, text: String, keyboard: JSONArray?) {
+    suspend fun enqueue(
+        context: Context,
+        text: String,
+        keyboard: JSONArray?,
+        replyKeyboard: JSONArray? = null,
+    ) {
         val db = Db.get(context)
         val arr = readOutbox(context)
         val item = JSONObject().put("text", text)
         if (keyboard != null) item.put("kb", keyboard)
+        if (replyKeyboard != null) item.put("rkb", replyKeyboard)
         arr.put(item)
         db.meta().put(Meta(K_OUTBOX, arr.toString()))
+
+        // Try to send right away. The queue stays as the safety net for a dead
+        // network; without this push a reply could sit for the whole idle
+        // period before anyone looked at the queue.
+        if (Secrets.configured(context)) {
+            runCatching { drain(context, Secrets.token(context), Secrets.chatId(context)) }
+        }
     }
 
     private suspend fun readOutbox(context: Context): JSONArray {
@@ -87,7 +104,14 @@ object Bot {
         return runCatching { JSONArray(raw) }.getOrDefault(JSONArray())
     }
 
-    private suspend fun drain(context: Context, token: String, chat: String) {
+    // Only one sender at a time. The service loop and an immediate push after
+    // enqueue can otherwise both read the same queue and send it twice.
+    private val sendLock = Mutex()
+
+    private suspend fun drain(context: Context, token: String, chat: String) =
+        sendLock.withLock { drainLocked(context, token, chat) }
+
+    private suspend fun drainLocked(context: Context, token: String, chat: String) {
         val db = Db.get(context)
         var queue = readOutbox(context)
         if (queue.length() == 0) return
@@ -102,6 +126,7 @@ object Bot {
                 chat,
                 item.optString("text"),
                 item.optJSONArray("kb"),
+                item.optJSONArray("rkb"),
             )
             when (reply) {
                 is Telegram.Reply.Ok -> queue = removeFirst(queue)
@@ -143,8 +168,15 @@ object Bot {
         var maxId = offset
         for (u in updates) {
             maxId = maxOf(maxId, u.optLong("update_id") + 1)
-            val cb = u.optJSONObject("callback_query") ?: continue
-            handleCallback(context, token, chat, cb)
+            val cb = u.optJSONObject("callback_query")
+            if (cb != null) {
+                handleCallback(context, token, chat, cb)
+                continue
+            }
+            // Typed commands and taps on the persistent keyboard both arrive as
+            // ordinary messages.
+            val msg = u.optJSONObject("message") ?: continue
+            runCatching { Commands.handleMessage(context, msg) }
         }
         db.meta().put(Meta(K_OFFSET, maxId.toString()))
     }
@@ -158,6 +190,29 @@ object Bot {
     ) {
         val id = cb.optString("id")
         val data = cb.optString("data")
+
+        // Language and mode taps are two part codes and are settled here. The
+        // answer buttons below are three part codes.
+        if (data.startsWith("l:")) {
+            Telegram.answerCallback(token, id, "")
+            Commands.setLang(context, if (data.endsWith("ru")) "ru" else "en")
+            return
+        }
+        if (data.startsWith("k:")) {
+            Telegram.answerCallback(token, id, "")
+            Commands.setMode(context, data.endsWith("m"))
+            return
+        }
+        // How long falling asleep took, asked right after a manual wake up.
+        if (data.startsWith("d:")) {
+            Telegram.answerCallback(token, id, Lang.string(context, R.string.tg_saved))
+            val p = data.split(":")
+            val minutes = p.getOrNull(2)?.toIntOrNull()
+            if (p.size == 3 && minutes != null) Commands.setLatency(context, p[1], minutes)
+            clearAsked(context)
+            return
+        }
+
         val parts = data.split(":")
         if (parts.size != 3) {
             Telegram.answerCallback(token, id, "")
@@ -184,28 +239,29 @@ object Bot {
         }
         db.answers().put(updated)
 
-        Telegram.answerCallback(token, id, context.getString(R.string.tg_saved))
+        Telegram.answerCallback(token, id, Lang.string(context, R.string.tg_saved))
 
         // Collapse the answered message so the chat stays a clean log.
         val messageId = cb.optJSONObject("message")?.optInt("message_id")
         if (messageId != null && messageId != 0) {
             val label = if (kind == "m")
-                context.getString(R.string.tg_mood_done, moodLabel(context, value))
+                Lang.string(context, R.string.tg_mood_done, moodLabel(context, value))
             else
-                context.getString(R.string.tg_mugs_done, value)
+                Lang.string(context, R.string.tg_mugs_done, value)
             Telegram.editText(token, chat, messageId, label)
         }
 
         // Wellbeing first, coffee second, one question on screen at a time.
         if (kind == "m" && updated.mugs == null) {
-            enqueue(context, context.getString(R.string.tg_q_mugs), mugsKeyboard(date))
+            enqueue(context, Lang.string(context, R.string.tg_q_mugs), mugsKeyboard(date))
             markAsked(context)
         } else if (updated.mood != null && updated.mugs != null) {
             clearAsked(context)
         }
 
-        // A new answer changes the fit.
-        runCatching { Engine.refit(context) }
+        // A new answer changes the fit, but a burst of answers should still
+        // cost one pass.
+        runCatching { Commands.refitSoon(context) }
     }
 
     // ---- outgoing decisions ---------------------------------------------
@@ -227,9 +283,9 @@ object Bot {
         if (existing?.mood != null && existing.mugs != null) return
 
         if (existing?.mood == null) {
-            enqueue(context, context.getString(R.string.tg_q_mood), moodKeyboard(date))
+            enqueue(context, Lang.string(context, R.string.tg_q_mood), moodKeyboard(date))
         } else {
-            enqueue(context, context.getString(R.string.tg_q_mugs), mugsKeyboard(date))
+            enqueue(context, Lang.string(context, R.string.tg_q_mugs), mugsKeyboard(date))
         }
         db.meta().put(Meta(K_MORNING, date))
         markAsked(context)
@@ -247,21 +303,10 @@ object Bot {
         val lead = f.gate.median - nowHour
         if (lead > 2.0 || lead < 0.0) return
 
-        val text = StringBuilder()
-        text.append(context.getString(R.string.tg_evening_gate, hhmm(f.gate.median)))
-        text.append("\n")
-        text.append(
-            context.getString(
-                R.string.tg_evening_range,
-                hhmm(f.onset.low),
-                hhmm(f.onset.high),
-            )
-        )
-        f.reverseAlarm?.let {
-            text.append("\n")
-            text.append(context.getString(R.string.tg_evening_reverse, hhmm(it.median)))
-        }
-        enqueue(context, text.toString(), null)
+        // Same wording as the forecast command, so the chat cannot contradict
+        // itself an hour apart.
+        val text = Commands.forecastText(context) ?: return
+        enqueue(context, text, null, Commands.menu(context))
         db.meta().put(Meta(K_EVENING, today))
     }
 
@@ -280,14 +325,20 @@ object Bot {
             is Telegram.Reply.Ok -> Unit
         }
         return when (val r = Telegram.sendMessage(token, chat, context.getString(R.string.tg_test_text), null)) {
-            is Telegram.Reply.Ok -> context.getString(R.string.tg_test_ok)
+            is Telegram.Reply.Ok -> {
+                // Good moment to register the slash command hints: the token is
+                // known to work and this runs on every save.
+                runCatching { Commands.publishCommands(context) }
+                context.getString(R.string.tg_test_ok)
+            }
             is Telegram.Reply.Fail -> context.getString(R.string.tg_test_chat, r.message)
         }
     }
 
     // ---- keyboards -------------------------------------------------------
 
-    private fun moodLabel(context: Context, value: Int): String = context.getString(
+    private fun moodLabel(context: Context, value: Int): String = Lang.string(
+        context,
         when (value) {
             1 -> R.string.tg_mood_1
             2 -> R.string.tg_mood_2
@@ -306,13 +357,4 @@ object Bot {
         Telegram.row("0" to "c:$date:0", "1" to "c:$date:1", "2" to "c:$date:2"),
         Telegram.row("3" to "c:$date:3", "4" to "c:$date:4", "5+" to "c:$date:5"),
     )
-
-    private fun hhmm(hour: Double): String {
-        var h = hour % 24.0
-        if (h < 0) h += 24.0
-        val total = Math.round(h * 60.0).toInt()
-        val hh = (total / 60) % 24
-        val mm = total % 60
-        return String.format("%02d:%02d", hh, mm)
-    }
 }

@@ -18,6 +18,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import dev.fasa.db.Db
 import dev.fasa.db.LightSample
+import dev.fasa.db.Meta
 import dev.fasa.tg.Bot
 import dev.fasa.tg.Secrets
 import kotlinx.coroutines.CoroutineScope
@@ -118,6 +119,12 @@ class LightService : Service(), SensorEventListener {
         val app = applicationContext
         scope.launch {
             while (isActive) {
+                // Proof of life. Without it nothing can tell a healthy phone
+                // from one where the system quietly killed this service.
+                runCatching {
+                    Db.get(app).meta()
+                        .put(Meta(K_BEAT, System.currentTimeMillis().toString()))
+                }
                 if (!Secrets.configured(app)) {
                     delay(IDLE_MS)
                     continue
@@ -197,6 +204,13 @@ class LightService : Service(), SensorEventListener {
     }
 
     companion object {
+        // Written on every loop pass so the chat can report whether the
+        // background half of the app is still running.
+        const val K_BEAT = "svc_beat"
+
+        // Two idle periods plus slack. Anything older means trouble.
+        const val BEAT_STALE_MS = 20 * 60 * 1000L
+
         private const val PERIOD_MS = 5 * 60 * 1000L
         private const val WINDOW_MS = 8 * 1000L
 

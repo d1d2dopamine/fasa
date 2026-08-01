@@ -581,6 +581,7 @@ private fun DataTab(refresh: Int, onChanged: () -> Unit) {
     var extra by remember { mutableStateOf(false) }
     var nights by remember { mutableIntStateOf(0) }
     var lastWake by remember { mutableStateOf<Long?>(null) }
+    var lastNight by remember { mutableStateOf<dev.fasa.db.Night?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var exporting by remember { mutableStateOf(false) }
@@ -619,20 +620,31 @@ private fun DataTab(refresh: Int, onChanged: () -> Unit) {
         onChanged()
     }
 
+    // Re-read while the tab is open. Background sync can land at any moment and
+    // a screen that quietly shows yesterday is worse than no screen at all.
     LaunchedEffect(refresh) {
-        loaded = false
-        val db = Db.get(context)
-        nights = runCatching { db.nights().count() }.getOrDefault(0)
-        lastWake = runCatching { db.nights().lastSleepEnd() }.getOrNull()
-        val granted = runCatching { HealthRepo.grantedSet(context) }.getOrDefault(emptySet())
-        core = granted.containsAll(HealthRepo.CORE)
-        extra = granted.containsAll(HealthRepo.EXTRA)
-        hcState = when (HealthRepo.status(context)) {
-            HealthRepo.Status.OK -> R.string.hc_ok
-            HealthRepo.Status.NEEDS_UPDATE -> R.string.hc_update
-            HealthRepo.Status.NOT_INSTALLED -> R.string.hc_missing
+        var first = true
+        while (true) {
+            if (first) loaded = false
+            val db = Db.get(context)
+            nights = runCatching { db.nights().count() }.getOrDefault(0)
+            lastWake = runCatching { db.nights().lastSleepEnd() }.getOrNull()
+            lastNight = runCatching {
+                db.nights().lastEnded(System.currentTimeMillis())
+            }.getOrNull()
+            val granted = runCatching { HealthRepo.grantedSet(context) }
+                .getOrDefault(emptySet())
+            core = granted.containsAll(HealthRepo.CORE)
+            extra = granted.containsAll(HealthRepo.EXTRA)
+            hcState = when (HealthRepo.status(context)) {
+                HealthRepo.Status.OK -> R.string.hc_ok
+                HealthRepo.Status.NEEDS_UPDATE -> R.string.hc_update
+                HealthRepo.Status.NOT_INSTALLED -> R.string.hc_missing
+            }
+            loaded = true
+            first = false
+            kotlinx.coroutines.delay(60_000L)
         }
-        loaded = true
     }
 
     if (!loaded) {
@@ -654,6 +666,68 @@ private fun DataTab(refresh: Int, onChanged: () -> Unit) {
             stringResource(R.string.last_wake, "").trim(),
             lastWake?.let { dayTime(it) } ?: stringResource(R.string.none),
         )
+    }
+
+    // The raw numbers behind every forecast. Without them a wrong prediction
+    // looks like a broken model when the real cause is a night the band never
+    // recorded.
+    SectionCard {
+        Label(stringResource(R.string.last_night))
+        Spacer(Modifier.height(8.dp))
+        val n = lastNight
+        if (n == null) {
+            Text(
+                stringResource(R.string.ln_none),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        } else {
+            InfoRow(
+                stringResource(R.string.ln_window),
+                stringResource(R.string.ln_range, dayTime(n.sleepStart), dayTime(n.sleepEnd)),
+            )
+            InfoRow(stringResource(R.string.ln_total), durText(context, n.minutesAsleep))
+            // A hand entered night has no stage breakdown. Printing zero
+            // minutes there would read as a broken sensor.
+            val staged = n.minutesDeep > 0 || n.minutesRem > 0
+            val notMeasured = stringResource(R.string.ln_no_phases)
+            InfoRow(
+                stringResource(R.string.ln_deep),
+                if (staged) partText(context, n.minutesDeep, n.minutesAsleep)
+                else notMeasured,
+            )
+            InfoRow(
+                stringResource(R.string.ln_rem),
+                if (staged) partText(context, n.minutesRem, n.minutesAsleep)
+                else notMeasured,
+            )
+            InfoRow(stringResource(R.string.ln_awake), durText(context, n.minutesAwake))
+            val hrMin = n.hrMin
+            val hrMinAt = n.hrMinAt
+            InfoRow(
+                stringResource(R.string.ln_hr_min),
+                when {
+                    hrMin == null -> stringResource(R.string.none)
+                    hrMinAt == null -> stringResource(R.string.ln_bpm, hrMin)
+                    else -> stringResource(R.string.ln_bpm_at, hrMin, dayTime(hrMinAt))
+                },
+            )
+            val hrMean = n.hrMean
+            InfoRow(
+                stringResource(R.string.ln_hr_mean),
+                if (hrMean == null) stringResource(R.string.none)
+                else stringResource(R.string.ln_bpm, hrMean),
+            )
+            InfoRow(stringResource(R.string.ln_source), n.source)
+            InfoRow(stringResource(R.string.ln_imported), dayTime(n.importedAt))
+            if (staged) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.ln_pct_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 
     notice?.let {
@@ -751,6 +825,16 @@ private fun DataTab(refresh: Int, onChanged: () -> Unit) {
             )
         }
     }
+}
+
+private fun durText(context: Context, minutes: Int): String =
+    context.getString(R.string.ln_dur, minutes / 60, minutes % 60)
+
+// Phase minutes mean little on their own; the share of the night is what a
+// person can compare between nights.
+private fun partText(context: Context, minutes: Int, total: Int): String {
+    val pct = if (total > 0) Math.round(minutes * 100.0 / total).toInt() else 0
+    return context.getString(R.string.ln_part, durText(context, minutes), pct)
 }
 
 // Signed minutes, for "+1 h 40 m later than the body wanted".

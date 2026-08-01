@@ -146,7 +146,11 @@ object HealthRepo {
                     ).records.flatMap { it.samples }
                 }.getOrDefault(emptyList())
 
-                val minSample = hrSamples.minByOrNull { it.beatsPerMinute }
+                // A single stray beat is not a resting heart rate. The low
+                // point is the fifth percentile: it survives one bad sample and
+                // still equals the true minimum on sparsely measured nights.
+                val sorted = hrSamples.sortedBy { it.beatsPerMinute }
+                val minSample = sorted.getOrNull(sorted.size / 20)
                 val hrMean = hrSamples
                     .takeIf { it.isNotEmpty() }
                     ?.map { it.beatsPerMinute }
