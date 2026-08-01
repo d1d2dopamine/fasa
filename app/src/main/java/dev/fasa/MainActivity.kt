@@ -24,12 +24,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.LocalCafe
 import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.Button
@@ -66,7 +69,9 @@ import androidx.compose.ui.unit.dp
 import dev.fasa.db.Db
 import dev.fasa.db.Meta
 import dev.fasa.health.HealthRepo
+import dev.fasa.export.Export
 import dev.fasa.model.Band
+import dev.fasa.model.Delay
 import dev.fasa.model.Engine
 import dev.fasa.model.Filter
 import dev.fasa.model.Forecast
@@ -74,7 +79,6 @@ import dev.fasa.ui.DayRing
 import dev.fasa.ui.DriftChart
 import dev.fasa.ui.Histogram
 import dev.fasa.ui.FasaTheme
-import dev.fasa.ui.Prefs
 import dev.fasa.ui.RingArc
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -88,8 +92,17 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // First run goes through the permission walkthrough instead. Without
+        // those grants nothing can be collected in the background.
+        if (!Prefs.onboarded(this)) {
+            startActivity(Intent(this, OnboardingActivity::class.java))
+            finish()
+            return
+        }
+
         setContent {
-            FasaTheme(dynamic = Prefs.dynamic(this)) {
+            FasaTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
@@ -273,6 +286,7 @@ private fun TodayTab(refresh: Int, onChanged: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var forecast by remember { mutableStateOf<Forecast?>(null) }
+    var delay by remember { mutableStateOf<Delay.Info?>(null) }
     var failed by remember { mutableStateOf(false) }
 
     LaunchedEffect(refresh) {
@@ -280,6 +294,7 @@ private fun TodayTab(refresh: Int, onChanged: () -> Unit) {
         forecast = null
         val f = runCatching { Engine.forecast(context) }.getOrNull()
         if (f == null) failed = true else forecast = f
+        delay = runCatching { Delay.estimate(context) }.getOrNull()
     }
 
     if (failed) {
@@ -336,6 +351,42 @@ private fun TodayTab(refresh: Int, onChanged: () -> Unit) {
         BandRow(gateColor, R.string.f_gate, f.gate)
         BandRow(onsetColor, R.string.f_onset, f.onset)
         BandRow(wakeColor, R.string.f_wake, f.wake)
+    }
+
+    // Physiology versus habit. The window is when the body is ready; the second
+    // line is when this particular person actually puts the phone down.
+    SectionCard {
+        val d = delay
+        val real = Delay.applied(d, f.gate.median)
+        if (d != null && real != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.Smartphone,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.secondary,
+                )
+                Spacer(Modifier.size(12.dp))
+                Column {
+                    Label(stringResource(R.string.f_habit))
+                    Text(hhmm(real), style = MaterialTheme.typography.headlineMedium)
+                    Text(
+                        stringResource(
+                            R.string.f_habit_delay,
+                            minutesOf(d.median),
+                            d.nights,
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        } else {
+            Text(
+                stringResource(R.string.f_habit_unknown),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 
     SectionCard {
@@ -515,21 +566,6 @@ private fun ModelTab(refresh: Int, onChanged: () -> Unit) {
         )
     }
 
-    Button(
-        enabled = !busy,
-        onClick = {
-            busy = true
-            scope.launch {
-                runCatching { Engine.refit(context) }
-                busy = false
-                onChanged()
-            }
-        },
-    ) {
-        Icon(Icons.Filled.Refresh, contentDescription = null)
-        Spacer(Modifier.size(8.dp))
-        Text(stringResource(R.string.btn_refit))
-    }
 }
 
 // ---- data ----------------------------------------------------------------
@@ -547,6 +583,30 @@ private fun DataTab(refresh: Int, onChanged: () -> Unit) {
     var lastWake by remember { mutableStateOf<Long?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var exporting by remember { mutableStateOf(false) }
+
+    val exportError = stringResource(R.string.export_error)
+    val exportDone = stringResource(R.string.export_done)
+
+    // The system file picker. No storage permission is involved: the user picks
+    // the destination, the app only gets a one shot stream to it.
+    val saveFile = rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts
+            .CreateDocument("application/json")
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        exporting = true
+        scope.launch {
+            val ok = runCatching {
+                val json = Export.build(context)
+                context.contentResolver.openOutputStream(uri)?.use {
+                    it.write(json.toByteArray(Charsets.UTF_8))
+                } ?: error("no stream")
+            }.isSuccess
+            notice = if (ok) exportDone else exportError
+            exporting = false
+        }
+    }
 
     val okText = stringResource(R.string.perms_ok)
     val partialText = stringResource(R.string.perms_partial)
@@ -601,13 +661,36 @@ private fun DataTab(refresh: Int, onChanged: () -> Unit) {
     }
 
     SectionCard {
-        OutlinedButton(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = { ask.launch(HealthRepo.ALL) },
-        ) {
-            Icon(Icons.Filled.Key, contentDescription = null)
-            Spacer(Modifier.size(8.dp))
-            Text(stringResource(R.string.btn_permissions))
+        // Nothing to ask for means no button. A dead control that always
+        // reports success is just noise on the screen.
+        if (core && extra) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Filled.CheckCircle,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.size(10.dp))
+                Text(
+                    stringResource(R.string.perms_all_ok),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        } else {
+            OutlinedButton(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { ask.launch(HealthRepo.ALL) },
+            ) {
+                Icon(Icons.Filled.Key, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text(stringResource(R.string.btn_permissions))
+            }
         }
         Spacer(Modifier.height(8.dp))
         Button(
@@ -641,4 +724,39 @@ private fun DataTab(refresh: Int, onChanged: () -> Unit) {
             Text(stringResource(R.string.btn_sync))
         }
     }
+
+    // Everything the database knows, in one self describing English file, for a
+    // doctor or a language model to read.
+    SectionCard {
+        Text(
+            stringResource(R.string.export_hint),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(
+            enabled = !exporting,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = { saveFile.launch(Export.fileName()) },
+        ) {
+            Icon(Icons.Filled.Download, contentDescription = null)
+            Spacer(Modifier.size(8.dp))
+            Text(stringResource(R.string.btn_export))
+        }
+        if (exporting) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                stringResource(R.string.export_running),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+    }
+}
+
+// Signed minutes, for "+1 h 40 m later than the body wanted".
+private fun minutesOf(hours: Double): String {
+    val total = Math.round(hours * 60.0).toInt()
+    val sign = if (total < 0) "-" else "+"
+    val abs = kotlin.math.abs(total)
+    return if (abs >= 60) "$sign${abs / 60} h ${abs % 60} m" else "$sign$abs m"
 }

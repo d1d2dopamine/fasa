@@ -1,17 +1,12 @@
 package dev.fasa.ui
 
-import android.content.Context
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -107,38 +102,17 @@ private val FasaTypography = Typography(
     ),
 )
 
-object Prefs {
-    private const val FILE = "fasa_ui"
-    private const val KEY_DYNAMIC = "dynamic_color"
-
-    fun dynamic(context: Context): Boolean =
-        context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
-            .getBoolean(KEY_DYNAMIC, false)
-
-    fun setDynamic(context: Context, value: Boolean) {
-        context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean(KEY_DYNAMIC, value)
-            .apply()
-    }
-}
-
 @Composable
 fun FasaTheme(
     dark: Boolean = isSystemInDarkTheme(),
-    dynamic: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val context = LocalContext.current
-    val canDynamic = dynamic && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val scheme = when {
-        canDynamic && dark -> dynamicDarkColorScheme(context)
-        canDynamic -> dynamicLightColorScheme(context)
-        dark -> NightScheme
-        else -> DayScheme
-    }
+    // No dynamic colour on purpose. Material You derives every role from one
+    // wallpaper hue, so primary, secondary and tertiary collapse into
+    // neighbouring tones. The day ring separates three arcs by colour alone,
+    // and a monochrome palette makes it unreadable.
     MaterialTheme(
-        colorScheme = scheme,
+        colorScheme = if (dark) NightScheme else DayScheme,
         typography = FasaTypography,
         content = content,
     )

@@ -124,4 +124,74 @@
     <string name="settings_appearance">Appearance</string>
     <string name="settings_dynamic">Wallpaper colours</string>
     <string name="settings_dynamic_hint">Android 12 and newer. Off by default: a sleep app is opened at night, so it stays dark and calm.</string>
+
+    <!-- Telegram -->
+    <string name="settings_telegram">Telegram</string>
+    <string name="tg_hint">The bot asks two questions each morning and sends the evening forecast. Create a bot with BotFather, paste the token and your chat id, then press Start in the chat with the bot.</string>
+    <string name="tg_token">Bot token</string>
+    <string name="tg_chat">Chat id</string>
+    <string name="tg_save_test">Save and test</string>
+    <string name="tg_testing">Sending a test message...</string>
+    <string name="tg_test_empty">Fill in both fields.</string>
+    <string name="tg_test_token">Token rejected: %1$s</string>
+    <string name="tg_test_chat">Token is fine, chat failed: %1$s. Open the chat with the bot and press Start.</string>
+    <string name="tg_test_ok">Sent. Check the chat with your bot.</string>
+    <string name="tg_test_text">fasa is connected.</string>
+    <string name="tg_saved">Saved</string>
+    <string name="tg_mood_done">Wellbeing: %1$s</string>
+    <string name="tg_mugs_done">Coffee: %1$d mugs</string>
+    <string name="tg_q_mood">How did you sleep? 1 wrecked, 5 excellent.</string>
+    <string name="tg_q_mugs">How many mugs of coffee yesterday?</string>
+    <string name="tg_mood_1">wrecked</string>
+    <string name="tg_mood_2">sluggish</string>
+    <string name="tg_mood_3">normal</string>
+    <string name="tg_mood_4">fresh</string>
+    <string name="tg_mood_5">excellent</string>
+    <string name="tg_evening_gate">Sleep window opens around %1$s.</string>
+    <string name="tg_evening_range">Likely to fall asleep between %1$s and %2$s.</string>
+    <string name="tg_evening_reverse">To hit your alarm, lights out by %1$s.</string>
+    <!-- Behavioural delay -->
+    <string name="f_habit">Actual bedtime</string>
+    <string name="f_habit_delay">%1$s after the window, from %2$d nights</string>
+    <string name="f_habit_unknown">Not enough nights yet to predict how long you stay up past the window.</string>
+    <!-- Export -->
+    <string name="btn_export">Export history</string>
+    <string name="export_hint">One JSON file with every night, answer and model value, written in English so a doctor or a language model can read it.</string>
+    <string name="export_running">Building the file...</string>
+    <string name="export_done">History saved.</string>
+    <string name="export_error">Could not write the file.</string>
+
+    <!-- Restored: notifications, onboarding, maintenance -->
+    <string name="cancel">Cancel</string>
+    <string name="perms_all_ok">All permissions granted</string>
+    <string name="settings_maintenance">Maintenance</string>
+    <string name="refit_hint">Rebuilds the model from the stored nights. Runs automatically after every sync; use this only if the numbers look wrong.</string>
+    <string name="refit_running">Rebuilding...</string>
+    <string name="refit_done">Model rebuilt.</string>
+    <string name="refit_confirm_title">Rebuild the model?</string>
+    <string name="refit_confirm_body">The current fit is discarded and recomputed from stored nights. Nothing is deleted, but confidence drops for a while.</string>
+    <string name="refit_confirm_yes">Rebuild</string>
+    <string name="ch_service">Light sensor</string>
+    <string name="ch_service_desc">Keeps ambient light sampling alive in the background.</string>
+    <string name="ch_alert">Alerts</string>
+    <string name="ch_alert_desc">Warns when the band stops sending data.</string>
+    <string name="nt_light_title">fasa is measuring light</string>
+    <string name="nt_light_waiting">Waiting for the first reading</string>
+    <string name="nt_light_value">%1$d lux, %2$d readings today</string>
+    <string name="nt_stale_title">No new data</string>
+    <string name="nt_stale_text">Nothing has arrived for %1$d hours. Open Mi Fitness to sync.</string>
+    <string name="ob_title">Set up fasa</string>
+    <string name="ob_subtitle">Four permissions. Without them the app cannot work unattended.</string>
+    <string name="ob_health">Health Connect</string>
+    <string name="ob_health_body">Sleep and heart rate from your band.</string>
+    <string name="ob_notif">Notifications</string>
+    <string name="ob_notif_body">Required for the light sensor and for stale data warnings.</string>
+    <string name="ob_battery">Battery optimisation</string>
+    <string name="ob_battery_body">Turn it off, otherwise the hourly sync gets killed.</string>
+    <string name="ob_autostart">Autostart</string>
+    <string name="ob_autostart_body">On realme and ColorOS this has to be enabled by hand in system settings.</string>
+    <string name="ob_open_settings">Open settings</string>
+    <string name="ob_grant">Grant</string>
+    <string name="ob_allow">Allow</string>
+    <string name="ob_done">Done</string>
 </resources>

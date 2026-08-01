@@ -89,18 +89,30 @@ class Filter(val particles: MutableList<Particle>) {
 
     // Reweight every hypothesis by how well it predicted one real night.
     // Sleep onset carries most of the information, duration adds a little.
-    fun observe(sleepStartHour: Double, sleepEndHour: Double, wokeAtHour: Double, caffeineMg: Double) {
+    // sigmaScale widens the likelihood for nights we only half trust. The first
+    // stored night has no observed previous wake up, so its predicted onset is
+    // built on a guess; a tripled sigma lets it nudge the cloud without letting
+    // an invented number dominate everything that follows.
+    fun observe(
+        sleepStartHour: Double,
+        sleepEndHour: Double,
+        wokeAtHour: Double,
+        caffeineMg: Double,
+        sigmaScale: Double = 1.0,
+    ) {
         val duration = sleepEndHour - sleepStartHour
         if (duration <= 0.0 || duration > 16.0) return
+        val sOnset = 1.2 * sigmaScale
+        val sDur = 1.5 * sigmaScale
 
         for (p in particles) {
             val predictedGate = gateFrom(p, wokeAtHour, Physics.L0, caffeineMg)
             val predictedOnset = predictedGate + p.latency / 60.0
             val predictedWake = wakeFrom(p, predictedOnset)
 
-            // 1.2 h sigma on onset, 1.5 h on duration.
-            val eOnset = (predictedOnset - sleepStartHour) / 1.2
-            val eDur = ((predictedWake - predictedOnset) - duration) / 1.5
+            // 1.2 h sigma on onset, 1.5 h on duration, both widened by sigmaScale.
+            val eOnset = (predictedOnset - sleepStartHour) / sOnset
+            val eDur = ((predictedWake - predictedOnset) - duration) / sDur
             p.weight *= exp(-0.5 * (eOnset * eOnset + eDur * eDur)) + 1e-12
         }
         normalize()
@@ -220,6 +232,21 @@ class Filter(val particles: MutableList<Particle>) {
             return sorted[idx]
         }
         return Band(median = at(0.5), low = at(0.1), high = at(0.9))
+    }
+
+    // Reverse alarm on its own, so the engine can pick the target wake time
+    // only after it knows when sleep is actually expected to start.
+    fun reverseBand(targetWake: Double): Band {
+        val values = DoubleArray(particles.size) { i ->
+            onsetForWake(particles[i], targetWake, targetWake - 8.0)
+        }
+        return band(values)
+    }
+
+    // A whole day of phase drift, used to rebase the cloud after a time zone change.
+    fun shiftPhase(hours: Double) {
+        if (hours == 0.0) return
+        for (p in particles) p.phi += hours
     }
 
     fun forecast(

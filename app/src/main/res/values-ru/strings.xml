@@ -124,4 +124,74 @@
     <string name="settings_appearance">Оформление</string>
     <string name="settings_dynamic">Цвета из обоев</string>
     <string name="settings_dynamic_hint">Android 12 и новее. По умолчанию выключено: приложение про сон открывают ночью, поэтому тема тёмная и спокойная.</string>
+
+    <!-- Telegram -->
+    <string name="settings_telegram">Telegram</string>
+    <string name="tg_hint">Бот утром задаёт два вопроса и вечером присылает прогноз. Создай бота в BotFather, вставь токен и свой chat id, потом нажми Start в чате с ботом.</string>
+    <string name="tg_token">Токен бота</string>
+    <string name="tg_chat">Chat id</string>
+    <string name="tg_save_test">Сохранить и проверить</string>
+    <string name="tg_testing">Отправляю тестовое сообщение...</string>
+    <string name="tg_test_empty">Заполни оба поля.</string>
+    <string name="tg_test_token">Токен отклонён: %1$s</string>
+    <string name="tg_test_chat">Токен верный, чат не принял: %1$s. Открой чат с ботом и нажми Start.</string>
+    <string name="tg_test_ok">Отправлено. Проверь чат с ботом.</string>
+    <string name="tg_test_text">fasa подключена.</string>
+    <string name="tg_saved">Записал</string>
+    <string name="tg_mood_done">Самочувствие: %1$s</string>
+    <string name="tg_mugs_done">Кофе: %1$d кружек</string>
+    <string name="tg_q_mood">Как спалось? 1 разбит, 5 отлично.</string>
+    <string name="tg_q_mugs">Сколько кружек кофе было вчера?</string>
+    <string name="tg_mood_1">разбит</string>
+    <string name="tg_mood_2">вяло</string>
+    <string name="tg_mood_3">нормально</string>
+    <string name="tg_mood_4">бодро</string>
+    <string name="tg_mood_5">отлично</string>
+    <string name="tg_evening_gate">Окно сна откроется около %1$s.</string>
+    <string name="tg_evening_range">Скорее всего уснёшь между %1$s и %2$s.</string>
+    <string name="tg_evening_reverse">Чтобы встать по будильнику, свет гасить к %1$s.</string>
+    <!-- Поведенческая задержка -->
+    <string name="f_habit">Реальный отбой</string>
+    <string name="f_habit_delay">%1$s к окну, по %2$d ночам</string>
+    <string name="f_habit_unknown">Ночей пока мало, привычку засиживаться после окна модель ещё не выучила.</string>
+    <!-- Экспорт -->
+    <string name="btn_export">Скачать историю</string>
+    <string name="export_hint">Один файл JSON со всеми ночами, ответами и параметрами модели. Текст внутри английский, чтобы его понял врач или нейросеть.</string>
+    <string name="export_running">Собираю файл...</string>
+    <string name="export_done">История сохранена.</string>
+    <string name="export_error">Не удалось записать файл.</string>
+
+    <!-- Восстановлено -->
+    <string name="cancel">Отмена</string>
+    <string name="perms_all_ok">Все разрешения выданы</string>
+    <string name="settings_maintenance">Обслуживание</string>
+    <string name="refit_hint">Пересчитывает модель по сохранённым ночам. Запускается сам после каждой синхронизации; жми только если цифры выглядят неверно.</string>
+    <string name="refit_running">Пересчитываю...</string>
+    <string name="refit_done">Модель пересобрана.</string>
+    <string name="refit_confirm_title">Пересобрать модель?</string>
+    <string name="refit_confirm_body">Текущая подгонка сбрасывается и считается заново. Данные не удаляются, но точность ненадолго упадёт.</string>
+    <string name="refit_confirm_yes">Пересобрать</string>
+    <string name="ch_service">Датчик света</string>
+    <string name="ch_service_desc">Держит замеры освещённости живыми в фоне.</string>
+    <string name="ch_alert">Предупреждения</string>
+    <string name="ch_alert_desc">Сообщает, когда браслет перестал присылать данные.</string>
+    <string name="nt_light_title">fasa меряет свет</string>
+    <string name="nt_light_waiting">Жду первый замер</string>
+    <string name="nt_light_value">%1$d люкс, замеров за сутки: %2$d</string>
+    <string name="nt_stale_title">Нет новых данных</string>
+    <string name="nt_stale_text">Ничего не приходило %1$d часов. Открой Mi Fitness для синхронизации.</string>
+    <string name="ob_title">Настройка fasa</string>
+    <string name="ob_subtitle">Четыре разрешения. Без них приложение не сможет работать само.</string>
+    <string name="ob_health">Health Connect</string>
+    <string name="ob_health_body">Сон и пульс с браслета.</string>
+    <string name="ob_notif">Уведомления</string>
+    <string name="ob_notif_body">Нужны для датчика света и предупреждений о застое данных.</string>
+    <string name="ob_battery">Оптимизация батареи</string>
+    <string name="ob_battery_body">Выключи её, иначе ежечасная синхронизация будет убита.</string>
+    <string name="ob_autostart">Автозапуск</string>
+    <string name="ob_autostart_body">На realme и ColorOS его надо включить вручную в настройках системы.</string>
+    <string name="ob_open_settings">Открыть настройки</string>
+    <string name="ob_grant">Выдать</string>
+    <string name="ob_allow">Разрешить</string>
+    <string name="ob_done">Готово</string>
 </resources>

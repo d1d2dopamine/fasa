@@ -21,7 +21,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -29,11 +32,14 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -51,8 +57,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.os.LocaleListCompat
 import dev.fasa.diag.SelfTest
+import dev.fasa.model.Engine
+import dev.fasa.tg.Bot
+import dev.fasa.tg.Secrets
 import dev.fasa.ui.FasaTheme
-import dev.fasa.ui.Prefs
 import kotlinx.coroutines.launch
 
 class SettingsActivity : AppCompatActivity() {
@@ -60,20 +68,12 @@ class SettingsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            var dynamic by remember { mutableStateOf(Prefs.dynamic(this)) }
-            FasaTheme(dynamic = dynamic) {
+            FasaTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    SettingsScreen(
-                        dynamic = dynamic,
-                        onDynamic = {
-                            dynamic = it
-                            Prefs.setDynamic(this, it)
-                        },
-                        onBack = { finish() },
-                    )
+                    SettingsScreen(onBack = { finish() })
                 }
             }
         }
@@ -86,11 +86,7 @@ private val FailCoral = Color(0xFFFF7B72)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsScreen(
-    dynamic: Boolean,
-    onDynamic: (Boolean) -> Unit,
-    onBack: () -> Unit,
-) {
+private fun SettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -98,7 +94,16 @@ private fun SettingsScreen(
         mutableStateOf(AppCompatDelegate.getApplicationLocales().toLanguageTags())
     }
     var running by remember { mutableStateOf(false) }
+    var refitting by remember { mutableStateOf(false) }
+    var confirmRefit by remember { mutableStateOf(false) }
+    var refitDone by remember { mutableStateOf(false) }
     var verdict by remember { mutableStateOf<SelfTest.Line?>(null) }
+    // Loaded once from encrypted storage. The token is shown in full only while
+    // it is being typed; nothing writes it to a log.
+    var token by remember { mutableStateOf(Secrets.token(context)) }
+    var chatId by remember { mutableStateOf(Secrets.chatId(context)) }
+    var tgBusy by remember { mutableStateOf(false) }
+    var tgResult by remember { mutableStateOf<String?>(null) }
     val lines: SnapshotStateList<SelfTest.Line> = remember { mutableStateListOf() }
 
     Scaffold(
@@ -140,25 +145,6 @@ private fun SettingsScreen(
                         LocaleListCompat.forLanguageTags("ru")
                     )
                 }
-            }
-
-            Section(stringResource(R.string.settings_appearance)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(
-                        stringResource(R.string.settings_dynamic),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Switch(checked = dynamic, onCheckedChange = onDynamic)
-                }
-                Text(
-                    stringResource(R.string.settings_dynamic_hint),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
 
             Section(stringResource(R.string.settings_diagnostics)) {
@@ -208,8 +194,123 @@ private fun SettingsScreen(
                 }
             }
 
+            Section(stringResource(R.string.settings_telegram)) {
+                Text(
+                    stringResource(R.string.tg_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = token,
+                    onValueChange = { token = it; tgResult = null },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    // Anyone holding the token owns the bot, so it is not left
+                    // sitting in plain sight on a shared screen.
+                    visualTransformation = PasswordVisualTransformation(),
+                    label = { Text(stringResource(R.string.tg_token)) },
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = chatId,
+                    onValueChange = { chatId = it; tgResult = null },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.tg_chat)) },
+                )
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    enabled = !tgBusy,
+                    onClick = {
+                        tgBusy = true
+                        tgResult = null
+                        Secrets.save(context, token, chatId)
+                        scope.launch {
+                            tgResult = runCatching { Bot.test(context) }.getOrElse { it.message }
+                            tgBusy = false
+                        }
+                    },
+                ) {
+                    Icon(Icons.Filled.Send, contentDescription = null)
+                    Spacer(Modifier.size(8.dp))
+                    Text(stringResource(R.string.tg_save_test))
+                }
+                if (tgBusy) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        stringResource(R.string.tg_testing),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                tgResult?.let {
+                    Spacer(Modifier.height(12.dp))
+                    Text(it, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+
+            Section(stringResource(R.string.settings_maintenance)) {
+                Text(
+                    stringResource(R.string.refit_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(
+                    enabled = !refitting,
+                    onClick = { confirmRefit = true },
+                ) {
+                    Icon(Icons.Filled.Refresh, contentDescription = null)
+                    Spacer(Modifier.size(8.dp))
+                    Text(stringResource(R.string.btn_refit))
+                }
+                if (refitting) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        stringResource(R.string.refit_running),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                if (refitDone) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        stringResource(R.string.refit_done),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+
             Spacer(Modifier.height(24.dp))
         }
+    }
+
+    if (confirmRefit) {
+        AlertDialog(
+            onDismissRequest = { confirmRefit = false },
+            icon = { Icon(Icons.Filled.Refresh, contentDescription = null) },
+            title = { Text(stringResource(R.string.refit_confirm_title)) },
+            text = { Text(stringResource(R.string.refit_confirm_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmRefit = false
+                    refitting = true
+                    refitDone = false
+                    scope.launch {
+                        runCatching { Engine.refit(context) }
+                        refitting = false
+                        refitDone = true
+                    }
+                }) {
+                    Text(stringResource(R.string.refit_confirm_yes))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmRefit = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
     }
 }
 
