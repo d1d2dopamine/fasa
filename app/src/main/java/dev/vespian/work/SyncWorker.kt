@@ -44,6 +44,7 @@ class SyncWorker(context: Context, params: WorkerParameters) :
 
         // Light samples older than ninety days cannot influence today's phase.
         db.light().prune(now - PRUNE_AFTER_MS)
+        db.hr().prune(now - PRUNE_AFTER_MS)
 
         checkStale(context, now)
 

@@ -307,4 +307,23 @@
     <string name="log_mood_set">Recorded: %1$s</string>
     <string name="log_mood_none">Not recorded today</string>
     <string name="log_hint">Works without the internet. The bot asks the same questions.</string>
+    <string name="tgb_cmd_why">What the forecast is built on</string>
+    <string name="tgb_cmd_export">Send all data as a file</string>
+    <string name="tgb_help_extra">/why - what the forecast is built on\n/export - all your data as one file</string>
+    <string name="tgb_why_head">Sleep gate opens around %1$s. Asleep around %2$s.</string>
+    <string name="tgb_why_latency">Falling asleep takes you about %1$d min.</string>
+    <string name="tgb_why_wake">Body ready to wake around %1$s.</string>
+    <string name="tgb_why_drift">Your internal day runs %1$d min longer than 24 hours, so everything slides later.</string>
+    <string name="tgb_why_caffeine">Caffeine still in you: about %1$d mg. It pushes the gate later.</string>
+    <string name="tgb_why_caffeine_none">No caffeine left in you right now.</string>
+    <string name="tgb_why_spread">Likely window %1$s to %2$s, spread %3$d min.</string>
+    <string name="tgb_why_trust_high">The window is narrow: %1$d nights agree with each other.</string>
+    <string name="tgb_why_trust_mid">The window is still wide. %1$d nights recorded, it keeps narrowing.</string>
+    <string name="tgb_why_trust_low">Very little data yet, %1$d nights. Treat this as a rough guess.</string>
+    <string name="tgb_why_basis">Built on %1$d nights where the sleep gate was really measured and %2$d nights where you fell asleep at once, which only say the gate was already open.</string>
+    <string name="tgb_why_anchor">Pulse low used as a body clock anchor on %1$d nights. It ignores what you chose to do.</string>
+    <string name="tgb_why_light">Light was read as a clock shift over %1$d stretches. Evening light pushes the clock later about eight times harder than morning light pulls it earlier.</string>
+    <string name="tgb_export_wait">Building the file.</string>
+    <string name="tgb_export_fail">Could not send the file. Try again in a minute.</string>
+    <string name="tgb_export_caption">Nights, answers, light and model state. %1$d KB. Keep this message as your backup.</string>
 </resources>

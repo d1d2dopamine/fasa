@@ -18,6 +18,9 @@ object Telegram {
     private const val BASE = "https://api.telegram.org/bot"
     private const val TIMEOUT_MS = 20_000
 
+    // Uploading a file over a phone connection is not a twenty second job.
+    private const val UPLOAD_TIMEOUT_MS = 90_000
+
     // Telegram caps a held connection at fifty seconds and answers the instant
     // an update arrives, so this is the longest useful wait.
     const val LONG_POLL_SEC = 50
@@ -167,6 +170,71 @@ object Telegram {
                 .put("text", text)
                 .put("reply_markup", JSONObject().put("inline_keyboard", JSONArray())),
         )
+
+    // An export is a few hundred kilobytes of JSON. As a message it would be
+    // chopped into forty pieces, so it goes as a file. Telegram accepts files
+    // only as multipart/form-data, which the JSON helper above cannot express,
+    // so this one writes the request body by hand.
+    suspend fun sendDocument(
+        token: String,
+        chatId: String,
+        fileName: String,
+        caption: String,
+        content: ByteArray,
+    ): Reply = withContext(Dispatchers.IO) {
+        if (token.isEmpty()) return@withContext Reply.Fail(0, "no token")
+        val boundary = "vespian" + System.currentTimeMillis()
+        val crlf = "\r\n"
+        var conn: HttpURLConnection? = null
+        try {
+            conn = (URL(BASE + token + "/sendDocument").openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = TIMEOUT_MS
+                readTimeout = UPLOAD_TIMEOUT_MS
+                doOutput = true
+                setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary)
+            }
+            conn.outputStream.use { out ->
+                fun write(s: String) = out.write(s.toByteArray(Charsets.UTF_8))
+                fun field(name: String, value: String) {
+                    write("--" + boundary + crlf)
+                    write("Content-Disposition: form-data; name=\"" + name + "\"" + crlf + crlf)
+                    write(value)
+                    write(crlf)
+                }
+                field("chat_id", chatId)
+                if (caption.isNotEmpty()) field("caption", caption)
+                write("--" + boundary + crlf)
+                write(
+                    "Content-Disposition: form-data; name=\"document\"; filename=\"" +
+                        fileName + "\"" + crlf
+                )
+                write("Content-Type: application/json" + crlf + crlf)
+                out.write(content)
+                write(crlf)
+                write("--" + boundary + "--" + crlf)
+                out.flush()
+            }
+
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val text = stream?.bufferedReader()?.use(BufferedReader::readText).orEmpty()
+            val json = runCatching { JSONObject(text) }.getOrNull()
+                ?: return@withContext Reply.Fail(code, "bad response")
+            if (json.optBoolean("ok", false)) {
+                Reply.Ok(json.optJSONObject("result") ?: JSONObject())
+            } else {
+                Reply.Fail(
+                    json.optInt("error_code", code),
+                    json.optString("description", "unknown error"),
+                )
+            }
+        } catch (e: Exception) {
+            Reply.Fail(-1, e.message ?: e.javaClass.simpleName)
+        } finally {
+            conn?.disconnect()
+        }
+    }
 
     suspend fun getMe(token: String): Reply = call(token, "getMe", JSONObject())
 

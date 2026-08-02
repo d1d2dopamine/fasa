@@ -21,6 +21,23 @@ data class Night(
     val importedAt: Long,
 )
 
+/**
+ * One heart rate reading, at any hour of the day.
+ *
+ * The nightly minimum alone is a single point: it says where the body clock
+ * bottomed out but nothing about how deep or how sharp that bottom was, and one
+ * bad beat can move it by an hour. Keeping the whole day lets the model fit a
+ * curve through hundreds of readings, which is much harder to fool.
+ *
+ * Time is the primary key, so re-reading the same window overwrites instead of
+ * piling up duplicates.
+ */
+@Entity(tableName = "hr")
+data class HrSample(
+    @PrimaryKey val at: Long,
+    val bpm: Int,
+)
+
 @Entity(tableName = "light")
 data class LightSample(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

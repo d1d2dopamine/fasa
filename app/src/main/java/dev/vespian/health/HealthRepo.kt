@@ -9,6 +9,7 @@ import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import dev.vespian.db.Db
+import dev.vespian.db.HrSample
 import dev.vespian.db.Meta
 import dev.vespian.db.Night
 import java.text.SimpleDateFormat
@@ -45,6 +46,16 @@ object HealthRepo {
      * Re-reading is free: dateKey is the primary key and inserts replace.
      */
     private const val REWIND_DAYS = 5L
+
+    /**
+     * Heart rate readings are averaged into buckets of this size.
+     *
+     * The band can report several beats a minute. Stored raw that is tens of
+     * thousands of rows a week for a curve that only needs the shape of a day.
+     * Five minute buckets keep months of history small and lose nothing the
+     * daily fit can use.
+     */
+    private const val HR_BIN_MS = 5L * 60L * 1000L
 
     private const val CURSOR_KEY = "hc_cursor"
     private val dateFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
@@ -180,6 +191,35 @@ object HealthRepo {
                     )
                 )
                 added++
+            }
+
+            // All day heart rate, not only the part inside a sleep session.
+            //
+            // The clock anchor is now a curve fitted through the whole day. A
+            // wave cannot be pinned down from its bottom alone: without the
+            // daytime readings on either side the fit has no idea how high the
+            // rhythm rises, and an amplitude it has to guess turns into a phase
+            // it gets wrong. These readings are what make the anchor steadier
+            // than the single lowest beat it replaced.
+            val hrAll = runCatching {
+                client.readRecords(
+                    ReadRecordsRequest(
+                        HeartRateRecord::class,
+                        timeRangeFilter = TimeRangeFilter.between(from, now),
+                    )
+                ).records.flatMap { it.samples }
+            }.getOrDefault(emptyList())
+
+            if (hrAll.isNotEmpty()) {
+                val binned = hrAll
+                    .groupBy { it.time.toEpochMilli() / HR_BIN_MS }
+                    .map { (bin, group) ->
+                        HrSample(
+                            at = bin * HR_BIN_MS,
+                            bpm = group.map { s -> s.beatsPerMinute }.average().toInt(),
+                        )
+                    }
+                db.hr().put(binned)
             }
 
             db.meta().put(Meta(CURSOR_KEY, now.toEpochMilli().toString()))

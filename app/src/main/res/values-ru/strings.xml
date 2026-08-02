@@ -307,4 +307,23 @@
     <string name="log_mood_set">Записано: %1$s</string>
     <string name="log_mood_none">Сегодня не отмечено</string>
     <string name="log_hint">Работает без интернета. Бот спрашивает то же самое.</string>
+    <string name="tgb_cmd_why">На чём построен прогноз</string>
+    <string name="tgb_cmd_export">Прислать все данные файлом</string>
+    <string name="tgb_help_extra">/why - на чём построен прогноз\n/export - все ваши данные одним файлом</string>
+    <string name="tgb_why_head">Окно сна открывается около %1$s. Засыпание около %2$s.</string>
+    <string name="tgb_why_latency">На засыпание у вас уходит около %1$d мин.</string>
+    <string name="tgb_why_wake">Тело будет готово проснуться около %1$s.</string>
+    <string name="tgb_why_drift">Ваши внутренние сутки длиннее 24 часов на %1$d мин, поэтому всё сдвигается позже.</string>
+    <string name="tgb_why_caffeine">В вас ещё около %1$d мг кофеина. Он отодвигает окно позже.</string>
+    <string name="tgb_why_caffeine_none">Кофеина в вас сейчас не осталось.</string>
+    <string name="tgb_why_spread">Вероятное окно с %1$s до %2$s, разброс %3$d мин.</string>
+    <string name="tgb_why_trust_high">Окно узкое: %1$d ночей согласуются между собой.</string>
+    <string name="tgb_why_trust_mid">Окно пока широкое. Записано ночей: %1$d, оно продолжает сужаться.</string>
+    <string name="tgb_why_trust_low">Данных пока мало, ночей: %1$d. Это грубая прикидка.</string>
+    <string name="tgb_why_basis">Построено на %1$d ночах, где окно сна измерено честно, и %2$d ночах, где вы уснули сразу - такие ночи говорят только то, что окно было уже открыто.</string>
+    <string name="tgb_why_anchor">Ночной минимум пульса взят как якорь внутренних часов в %1$d ночах. Он не зависит от того, во сколько вы решили лечь.</string>
+    <string name="tgb_why_light">Свет учтён как сдвиг часов на %1$d отрезках. Вечерний свет отодвигает часы позже примерно в восемь раз сильнее, чем утренний тянет раньше.</string>
+    <string name="tgb_export_wait">Собираю файл.</string>
+    <string name="tgb_export_fail">Не удалось отправить файл. Попробуйте через минуту.</string>
+    <string name="tgb_export_caption">Ночи, ответы, свет и состояние модели. %1$d КБ. Оставьте это сообщение как резервную копию.</string>
 </resources>

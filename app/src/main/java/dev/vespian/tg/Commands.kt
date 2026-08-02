@@ -9,6 +9,7 @@ import dev.vespian.db.Answer
 import dev.vespian.db.Db
 import dev.vespian.db.Meta
 import dev.vespian.db.Night
+import dev.vespian.export.Export
 import dev.vespian.model.Engine
 import dev.vespian.work.Screen
 import dev.vespian.work.SyncWorker
@@ -82,6 +83,8 @@ object Commands {
             "lang" -> askLang(context)
             "mode" -> askMode(context)
             "forecast" -> forecast(context)
+            "why" -> why(context)
+            "export" -> export(context)
             "status" -> status(context)
             "last" -> last(context)
             "bed" -> bed(context)
@@ -142,6 +145,8 @@ object Commands {
                 "lang", "language" -> "lang"
                 "mode" -> "mode"
                 "forecast" -> "forecast"
+                "why" -> "why"
+                "export", "backup" -> "export"
                 "status" -> "status"
                 "last" -> "last"
                 "bed" -> "bed"
@@ -233,7 +238,9 @@ object Commands {
         val list = ArrayList<Pair<String, String>>()
         list.add("help" to c.getString(R.string.tgb_cmd_help))
         list.add("forecast" to c.getString(R.string.tgb_cmd_forecast))
+        list.add("why" to c.getString(R.string.tgb_cmd_why))
         list.add("status" to c.getString(R.string.tgb_cmd_status))
+        list.add("export" to c.getString(R.string.tgb_cmd_export))
         list.add("last" to c.getString(R.string.tgb_cmd_last))
         list.add("mode" to c.getString(R.string.tgb_cmd_mode))
         list.add("lang" to c.getString(R.string.tgb_cmd_lang))
@@ -285,6 +292,8 @@ object Commands {
     suspend fun help(context: Context) {
         val text = StringBuilder()
         text.append(Lang.string(context, R.string.tgb_help))
+        text.append("\n")
+        text.append(Lang.string(context, R.string.tgb_help_extra))
         text.append("\n\n")
         text.append(Lang.string(context, R.string.tgb_mode_now, modeName(context)))
         say(context, text.toString())
@@ -312,6 +321,100 @@ object Commands {
         sb.append("\n")
         sb.append(Lang.string(context, R.string.f_nights, f.nights))
         return sb.toString()
+    }
+
+    // A forecast nobody understands is a forecast nobody acts on. This says
+    // what the number is built from, in the same order the model builds it.
+    private suspend fun why(context: Context) {
+        val f = runCatching { Engine.forecast(context) }.getOrNull()
+        if (f == null) {
+            say(context, Lang.string(context, R.string.tgb_no_forecast))
+            return
+        }
+        // Median over the surviving hypotheses, the same statistic the bands use.
+        val latency = runCatching {
+            val values = Engine.load(context).particles.map { it.latency }.sorted()
+            values[values.size / 2]
+        }.getOrDefault(25.0)
+
+        val sb = StringBuilder()
+        sb.append(
+            Lang.string(context, R.string.tgb_why_head, hhmm(f.gate.median), hhmm(f.onset.median))
+        )
+        sb.append("\n\n")
+        sb.append(Lang.string(context, R.string.tgb_why_latency, Math.round(latency).toInt()))
+        sb.append("\n")
+        sb.append(Lang.string(context, R.string.tgb_why_wake, hhmm(f.wake.median)))
+        sb.append("\n")
+        sb.append(
+            Lang.string(context, R.string.tgb_why_drift, Math.round(f.driftPerDay * 60.0).toInt())
+        )
+        sb.append("\n")
+        val mg = Math.round(f.caffeineNow).toInt()
+        if (mg > 0) sb.append(Lang.string(context, R.string.tgb_why_caffeine, mg))
+        else sb.append(Lang.string(context, R.string.tgb_why_caffeine_none))
+        sb.append("\n\n")
+        sb.append(
+            Lang.string(
+                context,
+                R.string.tgb_why_spread,
+                hhmm(f.onset.low),
+                hhmm(f.onset.high),
+                Math.round(f.onset.width * 60.0).toInt(),
+            )
+        )
+        sb.append("\n")
+        val trust = when {
+            f.onset.confidence >= 0.66 -> R.string.tgb_why_trust_high
+            f.onset.confidence >= 0.33 -> R.string.tgb_why_trust_mid
+            else -> R.string.tgb_why_trust_low
+        }
+        sb.append(Lang.string(context, trust, f.nights))
+
+        // Where the evidence came from. A night spent on the phone past an open
+        // gate only bounds the answer from above, and saying so out loud is the
+        // difference between a model and a fortune teller.
+        val obs = runCatching { Engine.obsStats(context) }.getOrNull()
+        if (obs != null && (obs[0] + obs[1] + obs[2]) > 0) {
+            sb.append("\n\n")
+            sb.append(Lang.string(context, R.string.tgb_why_basis, obs[0], obs[1]))
+            if (obs[2] > 0) {
+                sb.append("\n")
+                sb.append(Lang.string(context, R.string.tgb_why_anchor, obs[2]))
+            }
+            if (obs.size > 3 && obs[3] > 0) {
+                sb.append("\n")
+                sb.append(Lang.string(context, R.string.tgb_why_light, obs[3]))
+            }
+        }
+        say(context, sb.toString())
+    }
+
+    // The whole database as one file in the chat. No cable and no computer, and
+    // Telegram stores it, which makes this the only off device backup there is.
+    private suspend fun export(context: Context) {
+        val token = Secrets.token(context)
+        val chat = Secrets.chatId(context)
+        if (token.isEmpty() || chat.isEmpty()) return
+
+        say(context, Lang.string(context, R.string.tgb_export_wait))
+        val text = runCatching { Export.build(context) }.getOrNull()
+        if (text == null) {
+            say(context, Lang.string(context, R.string.tgb_export_fail))
+            return
+        }
+        val bytes = text.toByteArray(Charsets.UTF_8)
+        val reply = Telegram.sendDocument(
+            token,
+            chat,
+            Export.fileName(),
+            Lang.string(context, R.string.tgb_export_caption, (bytes.size + 1023) / 1024),
+            bytes,
+        )
+        // Silence on failure would look like the command was ignored.
+        if (reply is Telegram.Reply.Fail) {
+            say(context, Lang.string(context, R.string.tgb_export_fail))
+        }
     }
 
     // One glance at whether the pipeline is still alive. If the phone kills the

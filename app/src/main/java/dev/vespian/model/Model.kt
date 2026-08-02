@@ -27,8 +27,39 @@ object Physics {
     const val CAF_HALF_LIFE = 5.0
     const val MG_PER_MUG = 130.0
 
-    fun circadian(hour: Double, phi: Double, tau: Double): Double =
-        sin(2.0 * PI * (hour - phi) / tau)
+    // ---- shape of the circadian process ----------------------------------
+    //
+    // A plain sine is symmetric: it falls as slowly as it rises and its trough
+    // is as wide as its peak. The real rhythm is not shaped like that. The
+    // classical formulation of this model does not use one sine but a sum of
+    // harmonics, which produces a broad flat evening and a narrow deep trough
+    // in the early morning.
+    //
+    // The difference matters in exactly the place this app makes its living.
+    // With a plain sine the window where sleep becomes possible opens as a
+    // gentle slope, so the predicted onset drifts by a lot whenever the sleep
+    // pressure estimate moves a little. With the real shape that slope is
+    // steeper, the crossing is sharper, and the same uncertainty in pressure
+    // produces a narrower band of predicted times.
+    //
+    // It also fixes a quieter error. The flat evening means the clock resists
+    // sleep for hours rather than easing into it, which is the shape a delayed
+    // phase actually has. A sine understates that plateau, so it kept expecting
+    // sleep earlier than a delayed body allows.
+    //
+    // Coefficients are the standard harmonic weights for this process. They are
+    // fixed physiology, not personal parameters, so they are not fitted.
+    private val HARMONICS = doubleArrayOf(0.97, 0.22, 0.07, 0.03, 0.001)
+
+    // Scale so the peak of the summed wave is one and AMP keeps its meaning.
+    private const val HARMONIC_NORM = 1.06
+
+    fun circadian(hour: Double, phi: Double, tau: Double): Double {
+        val base = 2.0 * PI * (hour - phi) / tau
+        var sum = 0.0
+        for (i in HARMONICS.indices) sum += HARMONICS[i] * sin((i + 1) * base)
+        return sum / HARMONIC_NORM
+    }
 
     fun upperThreshold(hour: Double, p: Particle, caffeineMg: Double): Double =
         H0 + AMP * circadian(hour, p.phi, p.tau) + K_CAF * caffeineMg
@@ -44,6 +75,62 @@ object Physics {
 
     fun caffeine(mg: Double, dt: Double): Double =
         if (dt < 0.0) 0.0 else mg * 2.0.pow(-dt / CAF_HALF_LIFE)
+
+    // ---- light -----------------------------------------------------------
+    //
+    // Light does not simply "shift the clock" by an amount proportional to how
+    // bright it was. The same hour of light advances the clock in the morning
+    // and delays it in the evening, and the two directions are nowhere near
+    // equal: measured phase response curves give roughly two hours of delay for
+    // light near bedtime against about a quarter hour of advance for light on
+    // waking. That eight to one asymmetry is the single most important fact for
+    // a delayed phase, because it means a bright screen after midnight moves
+    // the schedule much further out than a bright window in the morning can
+    // pull it back.
+    //
+    // The curve is expressed against the circadian minimum, which every
+    // hypothesis in the filter places at its own hour, so the same light log
+    // scores differently for each of them. That is what makes the light data
+    // informative instead of decorative.
+    //
+    // Argument is hours since that hypothesis' circadian minimum.
+    // A positive result means a delay, a later clock.
+    const val PRC_DELAY_PEAK = 1.0
+    const val PRC_ADVANCE_PEAK = 0.125
+    const val PRC_DELAY_CENTRE = -3.0
+    const val PRC_ADVANCE_CENTRE = 1.5
+    const val PRC_DELAY_WIDTH = 2.5
+    const val PRC_ADVANCE_WIDTH = 2.0
+
+    // Half saturation of the intensity response, in lux. Ordinary room light
+    // already carries most of the effect and daylight is not proportionally
+    // stronger, so the response saturates rather than growing without bound.
+    const val LUX_HALF = 300.0
+
+    // Hours of phase shift produced by one hour of saturating light at the peak
+    // of the curve, before the personal gain of a hypothesis is applied.
+    const val K_LIGHT = 2.0
+
+    // Fold a difference of hours into the half open range from minus twelve to
+    // plus twelve, so that a light sample is always scored against the nearest
+    // circadian minimum rather than one a day away.
+    fun wrapHalf(x: Double, period: Double): Double {
+        var v = x
+        while (v <= -period / 2.0) v += period
+        while (v > period / 2.0) v -= period
+        return v
+    }
+
+    fun prc(hoursFromNadir: Double): Double {
+        val x = wrapHalf(hoursFromNadir, 24.0)
+        val delay = PRC_DELAY_PEAK *
+            exp(-((x - PRC_DELAY_CENTRE).pow(2)) / (2.0 * PRC_DELAY_WIDTH * PRC_DELAY_WIDTH))
+        val advance = PRC_ADVANCE_PEAK *
+            exp(-((x - PRC_ADVANCE_CENTRE).pow(2)) / (2.0 * PRC_ADVANCE_WIDTH * PRC_ADVANCE_WIDTH))
+        return delay - advance
+    }
+
+    fun dose(lux: Double): Double = if (lux <= 0.0) 0.0 else lux / (lux + LUX_HALF)
 }
 
 // One hypothesis about how this particular body works.

@@ -5,6 +5,7 @@ import dev.vespian.Prefs
 import dev.vespian.db.Db
 import dev.vespian.db.Meta
 import dev.vespian.db.ModelState
+import dev.vespian.work.Screen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -25,6 +26,47 @@ object Engine {
 
     // Time zone offset the saved particle cloud was built in.
     const val KEY_OFFSET = "model_offset"
+
+    // How the last fit was fed: measured nights, censored nights, pulse
+    // anchors, stretches of light.
+    const val KEY_OBS = "obs_stats"
+
+    // A light log shorter than this carries no useful phase information.
+    private const val LIGHT_MIN_SAMPLES = 2
+
+    /**
+     * Worst case trust in a fitted clock anchor.
+     *
+     * A perfect fit leaves the anchor at full strength. A fit that explains
+     * nothing widens it to four times the usual uncertainty rather than
+     * throwing it away, because even a rough curve says more about the body
+     * clock than nothing at all.
+     */
+    private const val ANCHOR_FLOOR = 0.25
+
+    /**
+     * Trust in a bare nightly minimum with no curve behind it.
+     *
+     * This is the old evidence: one reading, easily moved by a single quiet
+     * moment. It still counts, at half the strength of a clean fit.
+     */
+    private const val ANCHOR_RAW_SCALE = 2.0
+
+    // Bumped whenever the maths behind the saved cloud changes.
+    //
+    // The particle cloud on disk is the answer to the old equations. Loading it
+    // after an update would mix two different models and the result would be
+    // neither: predictions built half on the old physics and half on the new.
+    // A mismatch here throws the cloud away and refits every stored night under
+    // the current rules. Nothing measured is lost, only the fitted state, and
+    // that is derived data which is cheap to rebuild.
+    //
+    // 1 point observations
+    // 2 censored observations and pulse anchor
+    // 3 light phase response curve and data seeded prior
+    // 4 fitted daily pulse curve as the anchor, harmonic circadian shape
+    const val MODEL_VERSION = 4
+    const val KEY_MODEL_VERSION = "model_version"
 
     // ---- caches ----------------------------------------------------------
     // The cloud is 2000 particles of JSON and a forecast simulates every one of
@@ -74,9 +116,61 @@ object Engine {
         // Read once: the user can change what a mug means in Settings.
         val mgPerMug = Prefs.mgPerMug(context).toDouble()
 
+        // The moments the screen went dark. Without them a late onset cannot be
+        // told apart from a late decision to go to bed.
+        val screenEvents = withContext(Dispatchers.IO) {
+            runCatching { Screen.all(context) }.getOrDefault(emptyList())
+        }
+
+        // Everything the light sensor recorded over the span the nights cover.
+        // One query, sliced in memory afterwards.
+        val lightRows = withContext(Dispatchers.IO) {
+            val first = nights.firstOrNull()?.sleepStart ?: (System.currentTimeMillis() - 7L * 86_400_000L)
+            runCatching { db.light().between(first - 86_400_000L, System.currentTimeMillis()) }
+                .getOrDefault(emptyList())
+        }
+
+        // Every heart rate reading of every day, not only the ones inside a
+        // sleep session. The daily curve is fitted through these.
+        val hrRows = withContext(Dispatchers.IO) {
+            val first = nights.firstOrNull()?.sleepStart ?: (System.currentTimeMillis() - 7L * 86_400_000L)
+            runCatching { db.hr().between(first - 86_400_000L, System.currentTimeMillis()) }
+                .getOrDefault(emptyList())
+        }
+
+        var obsMeasured = 0
+        var obsCensored = 0
+        var obsAnchored = 0
+        var obsLight = 0
+
         val filter = withContext(Dispatchers.Default) {
             val nowHour = hourOf(System.currentTimeMillis(), offset)
-            val f = Filter.prior(nowHour)
+            val lightHours = lightRows.map { doubleArrayOf(hourOf(it.at, offset), it.lux.toDouble()) }
+
+            // Place the starting cloud on the first real night instead of on a
+            // population average. The circadian low is taken from the nightly
+            // heart rate minimum when the band recorded one, otherwise from the
+            // rule of thumb that it sits about two hours before waking.
+            val seedNight = nights.firstOrNull {
+                hourOf(it.sleepEnd, offset) - hourOf(it.sleepStart, offset) >= 2.0
+            }
+            // Readings grouped into calendar days, each day fitted once. A fit
+            // is keyed by the day it belongs to so a night can look up the
+            // curve that covers it.
+            val hrHours = hrRows.map { doubleArrayOf(hourOf(it.at, offset), it.bpm.toDouble()) }
+            val fitsByDay = hrHours
+                .groupBy { floor(it[0] / 24.0).toInt() }
+                .mapNotNull { (day, points) -> Cosinor.fit(points)?.let { day to it } }
+                .toMap()
+
+            val seedNadir = seedNight?.let { n ->
+                val day = floor(hourOf(n.sleepEnd, offset) / 24.0).toInt()
+                fitsByDay[day]?.nadirHour
+                    ?: n.hrMinAt?.let { hourOf(it, offset) }
+                    ?: (hourOf(n.sleepEnd, offset) - 2.0)
+            }
+
+            val f = Filter.prior(nowHour, seedNadir)
 
             var previousEnd: Double? = null
             for (night in nights) {
@@ -95,13 +189,61 @@ object Engine {
                 val sigmaScale = if (known == null) 3.0 else 1.0
 
                 val caffeine = (mugsByDate[night.dateKey] ?: 0) * mgPerMug
-                f.observe(start, end, wokeAt, caffeine, sigmaScale)
+
+                // A hand typed night has no screen event behind it and its sleep
+                // start already contains an assumed latency, so it stays a plain
+                // point observation.
+                val typed = night.source.startsWith("manual")
+                val bedAt = if (typed) null else Screen.bedtimeBefore(screenEvents, night.sleepStart)
+                val bedHour = bedAt?.let { hourOf(it, offset) }
+                // The clock anchor. A curve fitted through the whole day beats
+                // the single lowest beat of the night, because one stray
+                // reading cannot move it and because the daytime readings tell
+                // the fit how far the rhythm actually swings. The raw minimum
+                // stays as the fallback for days with too few readings.
+                val fit = fitsByDay[floor(end / 24.0).toInt()]
+                val hrHour = fit?.nadirHour ?: night.hrMinAt?.let { hourOf(it, offset) }
+
+                // How hard this anchor is allowed to pull. A clean fit pulls at
+                // full strength, a poor one is widened, and a bare minimum with
+                // no curve behind it is treated as the weakest evidence.
+                val nadirScale = when {
+                    fit != null -> 1.0 / (ANCHOR_FLOOR + (1.0 - ANCHOR_FLOOR) * fit.quality)
+                    else -> ANCHOR_RAW_SCALE
+                }
+
+                if (bedHour != null && bedHour <= start) {
+                    if ((start - bedHour) * 60.0 < Filter.CENSOR_BELOW_MIN) obsCensored++ else obsMeasured++
+                }
+                if (hrHour != null) obsAnchored++
+
+                // The light between the last wake up and this sleep is what
+                // pushed the clock into this night, so it is applied before the
+                // night is scored against the result.
+                val lightFrom = previousEnd
+                if (lightFrom != null) {
+                    val stretch = lightHours.filter { it[0] >= lightFrom && it[0] <= start }
+                    if (stretch.size >= LIGHT_MIN_SAMPLES) {
+                        f.applyLight(stretch)
+                        obsLight++
+                    }
+                }
+
+                f.observe(start, end, wokeAt, caffeine, sigmaScale, bedHour, hrHour, nadirScale)
                 previousEnd = end
             }
 
-            // No data for a while means the phase kept drifting unobserved.
+            // Today counts too. The light since the last wake up has already
+            // moved the clock, and tonight's forecast is built on the result.
             val lastEnd = previousEnd
             if (lastEnd != null) {
+                val trailing = lightHours.filter { it[0] >= lastEnd && it[0] <= nowHour }
+                if (trailing.size >= LIGHT_MIN_SAMPLES) {
+                    f.applyLight(trailing)
+                    obsLight++
+                }
+
+                // No data for a while means the phase kept drifting unobserved.
                 val idleDays = (nowHour - lastEnd) / 24.0
                 if (idleDays > 1.0) f.advanceDays(idleDays - 1.0)
             }
@@ -112,6 +254,8 @@ object Engine {
         withContext(Dispatchers.IO) {
             db.model().put(ModelState(id = 1, particles = filter.toJson(), updatedAt = stamp))
             db.meta().put(Meta(KEY_OFFSET, offset.toString()))
+            db.meta().put(Meta(KEY_OBS, "$obsMeasured|$obsCensored|$obsAnchored|$obsLight"))
+            db.meta().put(Meta(KEY_MODEL_VERSION, MODEL_VERSION.toString()))
         }
 
         filterCache = filter
@@ -134,6 +278,13 @@ object Engine {
 
         val cached = filterCache
         if (cached != null && state != null && state.updatedAt == filterStamp) return cached
+
+        // A cloud fitted by an older version of the maths is not usable. Refit
+        // instead of quietly serving predictions from retired equations.
+        val storedVersion = withContext(Dispatchers.IO) {
+            db.meta().get(KEY_MODEL_VERSION)
+        }?.toIntOrNull() ?: 0
+        if (storedVersion != MODEL_VERSION) return refit(context)
 
         val restored = saved?.let { Filter.fromJson(it) } ?: return refit(context)
 
@@ -185,6 +336,17 @@ object Engine {
         val morning = ZonedDateTime.of(LocalDate.now(), LocalTime.of(10, 0), ZoneId.systemDefault())
         val assumed = hourOf(morning.toInstant().toEpochMilli(), offset)
         return if (assumed <= nowHour) assumed else nowHour - 4.0
+    }
+
+    // Measured nights, censored nights, pulse anchors and light stretches from
+    // the last fit. Older installs stored three fields; the fourth reads zero
+    // until the next refit rather than throwing the whole record away.
+    suspend fun obsStats(context: Context): IntArray {
+        val raw = withContext(Dispatchers.IO) { Db.get(context).meta().get(KEY_OBS) }
+            ?: return IntArray(4)
+        val parts = raw.split("|")
+        if (parts.size < 3) return IntArray(4)
+        return IntArray(4) { parts.getOrNull(it)?.toIntOrNull() ?: 0 }
     }
 
     private suspend fun alarmRaw(context: Context): String? =
