@@ -294,6 +294,7 @@ private fun TodayTab(refresh: Int, onChanged: () -> Unit) {
     val scope = rememberCoroutineScope()
     var forecast by remember { mutableStateOf<Forecast?>(null) }
     var delay by remember { mutableStateOf<Delay.Info?>(null) }
+    var debt by remember { mutableStateOf<Int?>(null) }
     var failed by remember { mutableStateOf(false) }
 
     LaunchedEffect(refresh) {
@@ -302,6 +303,11 @@ private fun TodayTab(refresh: Int, onChanged: () -> Unit) {
         val f = runCatching { Engine.forecast(context) }.getOrNull()
         if (f == null) failed = true else forecast = f
         delay = runCatching { Delay.estimate(context) }.getOrNull()
+        // Pressure that had not reached the floor when the night ended. Shown
+        // here so the number does not live only inside a chat command.
+        debt = runCatching {
+            Math.round(Engine.load(context).debtBandMinutes().median).toInt()
+        }.getOrNull()
     }
 
     if (failed) {
@@ -358,6 +364,19 @@ private fun TodayTab(refresh: Int, onChanged: () -> Unit) {
         BandRow(gateColor, R.string.f_gate, f.gate)
         BandRow(onsetColor, R.string.f_onset, f.onset)
         BandRow(wakeColor, R.string.f_wake, f.wake)
+    }
+
+    debt?.let { minutes ->
+        if (f.nights > 0) {
+            SectionCard {
+                Label(stringResource(R.string.f_debt_title))
+                Text(
+                    text = if (minutes < 20) stringResource(R.string.f_debt_none)
+                    else stringResource(R.string.f_debt, minutes),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
     }
 
     // Physiology versus habit. The window is when the body is ready; the second

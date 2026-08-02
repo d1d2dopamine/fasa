@@ -3,6 +3,7 @@ package dev.vespian
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Tour
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -208,6 +210,26 @@ private fun SettingsScreen(onBack: () -> Unit) {
                 LanguageRow(R.string.tgb_mode_manual, manualMode) {
                     manualMode = true
                     scope.launch { Store.saveMode(context, true) }
+                }
+            }
+
+            // The first run screens are skipped forever once the flag is set,
+            // which is right for an update and wrong when someone wants to see
+            // the permissions checklist again. Reopening them here touches no
+            // data: clearing app storage would have wiped the whole database.
+            Section(stringResource(R.string.settings_onboarding)) {
+                Text(
+                    stringResource(R.string.settings_onboarding_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(onClick = {
+                    context.startActivity(Intent(context, OnboardingActivity::class.java))
+                }) {
+                    Icon(Icons.Filled.Tour, contentDescription = null)
+                    Spacer(Modifier.size(8.dp))
+                    Text(stringResource(R.string.settings_onboarding_open))
                 }
             }
 

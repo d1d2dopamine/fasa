@@ -251,6 +251,8 @@
     <string name="tgb_st_data">Последние данные: %1$d ч назад</string>
     <string name="tgb_st_data_never">Последние данные: пока нет</string>
     <string name="tgb_st_coffee">Кофе сегодня: %1$d</string>
+    <string name="tgb_st_debt">Долг сна: осталось около %1$d мин. Разбор в /corr</string>
+    <string name="tgb_st_debt_none">Долг сна: считать нечего</string>
     <string name="tgb_bed_ok">Записал, лёг в %1$s</string>
     <string name="tgb_up_ok">Ночь записана: %1$d ч %2$d мин</string>
     <string name="tgb_up_none">Отметки \"ложусь\" нет или она слишком свежая.</string>
@@ -258,6 +260,12 @@
     <string name="tgb_coffee_ok">Кофе сегодня: %1$d</string>
     <string name="settings_mode">Режим</string>
     <string name="settings_mode_hint">Без рук - всё считывается само. Ручной добавляет в чат кнопки \"ложусь\", \"встал\" и кофе, для работы без браслета.</string>
+    <string name="f_debt_title">Долг сна</string>
+    <string name="f_debt">К концу последней ночи осталось около %1$d мин неизрасходованного давления.</string>
+    <string name="f_debt_none">Отдавать нечего. Последняя ночь закончилась сама.</string>
+    <string name="settings_onboarding">Окно входа</string>
+    <string name="settings_onboarding_hint">Приветствие, выбор режима и список разрешений. Повторный показ ничего не меняет в ваших данных.</string>
+    <string name="settings_onboarding_open">Показать окно входа</string>
     <string name="last_night">Последние замеры</string>
     <string name="ln_none">Ночей пока нет</string>
     <string name="ln_window">Сон</string>
@@ -329,7 +337,7 @@
     <string name="log_hint">Работает без интернета. Бот спрашивает то же самое.</string>
     <string name="tgb_cmd_why">На чём построен прогноз</string>
     <string name="tgb_cmd_export">Прислать все данные файлом</string>
-    <string name="tgb_help_extra">/why - на чём построен прогноз\n/export - все ваши данные одним файлом\n/wakeup - последнее утро оборвал будильник или человек\n/corr - долг сна и короткий план</string>
+    <string name="tgb_help_extra">/why - на чём построен прогноз\n/last - что браслет измерил прошлой ночью\n/export - все ваши данные одним файлом\n/wakeup - последнее утро оборвал будильник или человек\n/corr - долг сна и короткий план</string>
     <string name="tgb_why_head">Окно сна открывается около %1$s. Засыпание около %2$s.</string>
     <string name="tgb_why_latency">На засыпание у вас уходит около %1$d мин.</string>
     <string name="tgb_why_wake">Тело будет готово проснуться около %1$s.</string>
@@ -341,7 +349,7 @@
     <string name="tgb_why_trust_mid">Окно пока широкое. Записано ночей: %1$d, оно продолжает сужаться.</string>
     <string name="tgb_why_trust_low">Данных пока мало, ночей: %1$d. Это грубая прикидка.</string>
     <string name="tgb_why_basis">Построено на %1$d ночах, где окно сна измерено честно, и %2$d ночах, где вы уснули сразу - такие ночи говорят только то, что окно было уже открыто.</string>
-    <string name="tgb_why_anchor">Ночной минимум пульса взят как якорь внутренних часов в %1$d ночах. Он не зависит от того, во сколько вы решили лечь.</string>
+    <string name="tgb_why_anchor">Ночной минимум пульса взят как якорь внутре��них часов в %1$d ночах. Он не зависит от того, во сколько вы решили лечь.</string>
     <string name="tgb_why_behaviour">Поведенческий слой: этот вечер похож примерно на %1$d мин сверх открытого окна, обучен на %2$d ночах. Он решает только то, насколько сильно сегодняшняя ночь влияет на оценку ваших часов. Окно он не двигает.</string>
     <string name="tgb_why_behaviour_wait">Поведенческий слой молчит: %1$d ночей из %2$d. Раньше он ловит случайности и предсказывает хуже, чем ваше собственное среднее.</string>
     <string name="tgb_why_light">Свет учтён как сдвиг часов на %1$d отрезках. Вечерний свет отодвигает часы позже примерно в восемь раз сильнее, чем утренний тянет раньше.</string>

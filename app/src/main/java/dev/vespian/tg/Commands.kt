@@ -578,6 +578,19 @@ object Commands {
         }
         sb.append("\n")
         sb.append(Lang.string(context, R.string.tgb_st_coffee, mugs))
+        // The same number /corr works from, shown here without the plan, so
+        // the debt is visible without having to remember another command.
+        val debt = runCatching {
+            Math.round(Engine.load(context).debtBandMinutes().median).toInt()
+        }.getOrNull()
+        if (debt != null && nights > 0) {
+            sb.append("\n")
+            if (debt < DEBT_FLOOR_MIN) {
+                sb.append(Lang.string(context, R.string.tgb_st_debt_none))
+            } else {
+                sb.append(Lang.string(context, R.string.tgb_st_debt, debt))
+            }
+        }
         say(context, sb.toString())
     }
 

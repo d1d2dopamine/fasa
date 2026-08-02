@@ -2,6 +2,7 @@ package dev.vespian.export
 
 import android.content.Context
 import dev.vespian.db.Db
+import dev.vespian.db.Forced
 import dev.vespian.db.Night
 import dev.vespian.model.Engine
 import dev.vespian.model.Physics
@@ -25,7 +26,11 @@ import kotlin.math.sqrt
 // A bare table of numbers invites confident wrong conclusions.
 object Export {
 
-    const val FORMAT_VERSION = 1
+    const val FORMAT_VERSION = 2
+
+    // Thirty days of five minute bins is about eight thousand rows. Longer than
+    // that and the file stops being something a person can open.
+    private const val HR_EXPORT_DAYS = 30L
 
     fun fileName(): String = "vespian-export-" + LocalDate.now() + ".json"
 
@@ -36,6 +41,9 @@ object Export {
 
         val nights = db.nights().all()
         val answers = db.answers().last(10_000).associateBy { it.dateKey }
+        // Without this flag a reader cannot tell a night the body ended from a
+        // night an alarm ended, and the two mean opposite things.
+        val forced = runCatching { Forced.all(context) }.getOrDefault(emptySet())
 
         val root = JSONObject()
         root.put("format", "vespian-sleep-export")
@@ -49,7 +57,15 @@ object Export {
         root.put("subject", subject())
 
         val arr = JSONArray()
-        for (n in nights) arr.put(nightJson(n, zone, answers[n.dateKey]?.mood, answers[n.dateKey]?.mugs))
+        for (n in nights) arr.put(
+            nightJson(
+                n,
+                zone,
+                answers[n.dateKey]?.mood,
+                answers[n.dateKey]?.mugs,
+                forced.contains(n.dateKey),
+            )
+        )
         root.put("nights", arr)
 
         val ans = JSONArray()
@@ -65,6 +81,7 @@ object Export {
         }
         root.put("self_reports", ans)
 
+        root.put("heart_rate", heartRate(context, zone))
         root.put("light_daily", lightDaily(context, zone))
         root.put("model", modelJson(context))
         root.put("summary", summary(nights, offset, answers.mapValues { it.value.mugs ?: 0 }))
@@ -113,7 +130,13 @@ object Export {
 
     // ---- nights ----------------------------------------------------------
 
-    private fun nightJson(n: Night, zone: ZoneId, mood: Int?, mugs: Int?): JSONObject {
+    private fun nightJson(
+        n: Night,
+        zone: ZoneId,
+        mood: Int?,
+        mugs: Int?,
+        forcedWake: Boolean,
+    ): JSONObject {
         val o = JSONObject()
         o.put("date", n.dateKey)
         o.put("sleep_start_local", local(n.sleepStart, zone))
@@ -141,7 +164,33 @@ object Export {
         o.put("spo2_mean_percent", n.spo2Mean ?: JSONObject.NULL)
         o.put("morning_wellbeing_1_to_5", mood ?: JSONObject.NULL)
         o.put("coffee_mugs_previous_day", mugs ?: JSONObject.NULL)
+        o.put("wake_was_forced", forcedWake)
         o.put("source", n.source)
+        return o
+    }
+
+    // ---- heart rate ------------------------------------------------------
+
+    // The raw pulse series, five minute bins, thirty days. This is the series
+    // the circadian anchor is fitted to, so leaving it out would make the model
+    // section impossible to check.
+    private suspend fun heartRate(context: Context, zone: ZoneId): JSONObject {
+        val db = Db.get(context)
+        val now = System.currentTimeMillis()
+        val from = now - HR_EXPORT_DAYS * 24 * 3600 * 1000L
+        val samples = runCatching { db.hr().between(from, now) }.getOrDefault(emptyList())
+        val o = JSONObject()
+        o.put("bin_minutes", 5)
+        o.put("window_days", HR_EXPORT_DAYS)
+        o.put("samples", samples.size)
+        val arr = JSONArray()
+        for (s in samples) {
+            val j = JSONObject()
+            j.put("local", local(s.at, zone))
+            j.put("bpm", s.bpm)
+            arr.put(j)
+        }
+        o.put("series", arr)
         return o
     }
 

@@ -251,6 +251,8 @@
     <string name="tgb_st_data">Last data: %1$d hours ago</string>
     <string name="tgb_st_data_never">Last data: none yet</string>
     <string name="tgb_st_coffee">Coffee today: %1$d</string>
+    <string name="tgb_st_debt">Sleep debt: about %1$d min left to repay. /corr for the plan</string>
+    <string name="tgb_st_debt_none">Sleep debt: none worth counting</string>
     <string name="tgb_bed_ok">Bedtime saved: %1$s</string>
     <string name="tgb_up_ok">Night saved: %1$d h %2$d min</string>
     <string name="tgb_up_none">No bedtime marked, or it was too recent.</string>
@@ -258,6 +260,12 @@
     <string name="tgb_coffee_ok">Coffee today: %1$d</string>
     <string name="settings_mode">Mode</string>
     <string name="settings_mode_hint">Hands free reads everything by itself. Manual adds chat buttons for going to bed, getting up and coffee, for use without a band.</string>
+    <string name="f_debt_title">Sleep debt</string>
+    <string name="f_debt">About %1$d min of pressure was left unspent when the last night ended.</string>
+    <string name="f_debt_none">Nothing worth repaying. The last night ended on its own.</string>
+    <string name="settings_onboarding">First run screens</string>
+    <string name="settings_onboarding_hint">Welcome, mode and the permissions checklist. Opening them again changes nothing in your data.</string>
+    <string name="settings_onboarding_open">Show first run screens</string>
     <string name="last_night">Last measurements</string>
     <string name="ln_none">No nights recorded yet</string>
     <string name="ln_window">Asleep</string>
@@ -329,7 +337,7 @@
     <string name="log_hint">Works without the internet. The bot asks the same questions.</string>
     <string name="tgb_cmd_why">What the forecast is built on</string>
     <string name="tgb_cmd_export">Send all data as a file</string>
-    <string name="tgb_help_extra">/why - what the forecast is built on\n/export - all your data as one file\n/wakeup - the last morning was ended by an alarm or by someone else\n/corr - sleep debt and a short plan</string>
+    <string name="tgb_help_extra">/why - what the forecast is built on\n/last - what the band measured last night\n/export - all your data as one file\n/wakeup - the last morning was ended by an alarm or by someone else\n/corr - sleep debt and a short plan</string>
     <string name="tgb_why_head">Sleep gate opens around %1$s. Asleep around %2$s.</string>
     <string name="tgb_why_latency">Falling asleep takes you about %1$d min.</string>
     <string name="tgb_why_wake">Body ready to wake around %1$s.</string>
