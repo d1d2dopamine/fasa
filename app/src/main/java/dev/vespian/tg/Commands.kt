@@ -62,6 +62,14 @@ object Commands {
         val raw = msg.optString("text").trim()
         if (raw.isEmpty()) return
 
+        // A tap can fail: no network at that second, or Telegram refusing a
+        // late answer. Typing the language must always work, otherwise one dead
+        // button locks the whole bot out with no way back.
+        langFromText(raw)?.let {
+            setLang(context, it)
+            return
+        }
+
         // Until a language is picked, anything at all gets the start message.
         if (!Lang.chosen(context)) {
             start(context)
@@ -79,9 +87,48 @@ object Commands {
             "bed" -> bed(context)
             "up" -> up(context)
             "coffee" -> coffee(context)
-            else -> say(context, Lang.string(context, R.string.tgb_unknown))
+            else -> {
+                // A bare digit is the wellbeing answer typed by hand, for when
+                // the buttons on the morning question no longer respond.
+                val mood = raw.toIntOrNull()
+                if (mood != null && mood in 1..5) moodFromText(context, mood)
+                else say(context, Lang.string(context, R.string.tgb_unknown))
+            }
         }
     }
+
+    // Accepts the language typed instead of tapped, in either language and with
+    // or without a leading slash.
+    private fun langFromText(raw: String): String? = when (norm(raw)) {
+        "ru", "rus", "russian", "\u0440\u0443\u0441", "\u0440\u0443\u0441\u0441\u043a\u0438\u0439" -> "ru"
+        "en", "eng", "english", "\u0430\u043d\u0433\u043b\u0438\u0439\u0441\u043a\u0438\u0439" -> "en"
+        else -> null
+    }
+
+    // Same effect as tapping a wellbeing button. The date is the one the
+    // morning question was about: the day the last recorded night ended.
+    private suspend fun moodFromText(context: Context, value: Int) {
+        val db = Db.get(context)
+        val wake = db.nights().lastSleepEnd() ?: 0L
+        val date = if (wake > 0L)
+            Instant.ofEpochMilli(wake).atZone(ZoneId.systemDefault()).toLocalDate().toString()
+        else dayKey()
+        val existing = db.answers().byDate(date)
+        db.answers().put(Answer(date, value, existing?.mugs, System.currentTimeMillis()))
+        say(context, Lang.string(context, R.string.tg_mood_done, moodName(context, value)))
+        runCatching { refitSoon(context) }
+    }
+
+    private fun moodName(context: Context, value: Int): String = Lang.string(
+        context,
+        when (value) {
+            1 -> R.string.tg_mood_1
+            2 -> R.string.tg_mood_2
+            3 -> R.string.tg_mood_3
+            4 -> R.string.tg_mood_4
+            else -> R.string.tg_mood_5
+        }
+    )
 
     // Commands are matched by name, keyboard buttons by their label. Labels are
     // checked in both languages so switching language cannot leave a stale

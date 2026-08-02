@@ -173,7 +173,10 @@ object Bot {
             maxId = maxOf(maxId, u.optLong("update_id") + 1)
             val cb = u.optJSONObject("callback_query")
             if (cb != null) {
-                handleCallback(context, token, chat, cb)
+                // One bad tap must never wedge the stream. Without this guard a
+                // throw here skips the offset write below, so the same update is
+                // replayed for ever and nothing newer is ever seen.
+                runCatching { handleCallback(context, token, chat, cb) }
                 continue
             }
             // Typed commands and taps on the persistent keyboard both arrive as
@@ -195,21 +198,23 @@ object Bot {
         val id = cb.optString("id")
         val data = cb.optString("data")
 
+        // The spinner on the tapped button stops only when Telegram receives
+        // this call, and Telegram refuses it a few seconds after the tap. So it
+        // goes first, before any database write, model refit or second request.
+        runCatching { Telegram.answerCallback(token, id, "") }
+
         // Language and mode taps are two part codes and are settled here. The
         // answer buttons below are three part codes.
         if (data.startsWith("l:")) {
-            Telegram.answerCallback(token, id, "")
             Commands.setLang(context, if (data.endsWith("ru")) "ru" else "en")
             return
         }
         if (data.startsWith("k:")) {
-            Telegram.answerCallback(token, id, "")
             Commands.setMode(context, data.endsWith("m"))
             return
         }
         // How long falling asleep took, asked right after a manual wake up.
         if (data.startsWith("d:")) {
-            Telegram.answerCallback(token, id, Lang.string(context, R.string.tg_saved))
             val p = data.split(":")
             val minutes = p.getOrNull(2)?.toIntOrNull()
             if (p.size == 3 && minutes != null) Commands.setLatency(context, p[1], minutes)
@@ -218,17 +223,11 @@ object Bot {
         }
 
         val parts = data.split(":")
-        if (parts.size != 3) {
-            Telegram.answerCallback(token, id, "")
-            return
-        }
+        if (parts.size != 3) return
         val kind = parts[0]
         val date = parts[1]
         val value = parts[2].toIntOrNull()
-        if (value == null) {
-            Telegram.answerCallback(token, id, "")
-            return
-        }
+        if (value == null) return
 
         val db = Db.get(context)
         val existing = db.answers().byDate(date)
@@ -237,13 +236,8 @@ object Bot {
             "c" -> Answer(date, existing?.mood, value, System.currentTimeMillis())
             else -> null
         }
-        if (updated == null) {
-            Telegram.answerCallback(token, id, "")
-            return
-        }
+        if (updated == null) return
         db.answers().put(updated)
-
-        Telegram.answerCallback(token, id, Lang.string(context, R.string.tg_saved))
 
         // Collapse the answered message so the chat stays a clean log.
         val messageId = cb.optJSONObject("message")?.optInt("message_id")
