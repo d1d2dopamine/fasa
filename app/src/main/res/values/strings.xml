@@ -197,6 +197,26 @@
     <string name="ob_grant">Grant</string>
     <string name="ob_allow">Allow</string>
     <string name="ob_done">Done</string>
+    <string name="ob_welcome_title">Vespian</string>
+    <string name="ob_welcome_body">Vespian learns when your body clock opens the door to sleep, and tells you before the evening starts. It predicts. It never tells you when to go to bed.</string>
+    <string name="ob_start">Start</string>
+    <string name="ob_next">Next</string>
+    <string name="ob_mode_title">How should it work?</string>
+    <string name="ob_mode_auto">Hands free</string>
+    <string name="ob_mode_auto_body">Sleep and heart rate arrive from your band through Health Connect. Nothing to tap. This is the accurate one.</string>
+    <string name="ob_mode_manual">Manual</string>
+    <string name="ob_mode_manual_body">No band needed. You mark when you fell asleep and when you woke up, two taps a day. Without heart rate the forecast window stays wider and the model needs longer to learn your clock.</string>
+    <string name="ob_mode_pick">Choose</string>
+    <string name="ob_mode_switch_later">You can switch mode later in Settings. Nothing is lost.</string>
+    <string name="ob_subtitle_manual">Two permissions. The chat needs them even without a band.</string>
+    <string name="ob_hc_missing">Health Connect is not on this phone. It is the bridge from your band, so install it and come back.</string>
+    <string name="ob_hc_update">Health Connect is out of date. Update it and come back.</string>
+    <string name="ob_hc_install">Install</string>
+    <string name="ob_source_title">Data source</string>
+    <string name="ob_source_checking">Looking for your band.</string>
+    <string name="ob_source_found">Connected: %1$s. Sleep and heart rate will arrive on their own.</string>
+    <string name="ob_source_empty">Health Connect is empty so far. That is normal on a fresh install. Open Mi Fitness once and sync, the first night will appear by itself.</string>
+    <string name="ob_source_manual">Manual mode. No band is read. You mark sleep and wake up yourself, in the app or in the chat.</string>
 
     <string name="tgb_start">Vespian bot is running. Choose the chat language.</string>
     <string name="tgb_lang_ask">Chat language?</string>
@@ -309,7 +329,7 @@
     <string name="log_hint">Works without the internet. The bot asks the same questions.</string>
     <string name="tgb_cmd_why">What the forecast is built on</string>
     <string name="tgb_cmd_export">Send all data as a file</string>
-    <string name="tgb_help_extra">/why - what the forecast is built on\n/export - all your data as one file\n/wakeup - the last morning was ended by an alarm or by someone else</string>
+    <string name="tgb_help_extra">/why - what the forecast is built on\n/export - all your data as one file\n/wakeup - the last morning was ended by an alarm or by someone else\n/corr - sleep debt and a short plan</string>
     <string name="tgb_why_head">Sleep gate opens around %1$s. Asleep around %2$s.</string>
     <string name="tgb_why_latency">Falling asleep takes you about %1$d min.</string>
     <string name="tgb_why_wake">Body ready to wake around %1$s.</string>
@@ -322,6 +342,8 @@
     <string name="tgb_why_trust_low">Very little data yet, %1$d nights. Treat this as a rough guess.</string>
     <string name="tgb_why_basis">Built on %1$d nights where the sleep gate was really measured and %2$d nights where you fell asleep at once, which only say the gate was already open.</string>
     <string name="tgb_why_anchor">Pulse low used as a body clock anchor on %1$d nights. It ignores what you chose to do.</string>
+    <string name="tgb_why_behaviour">Behaviour layer: this evening looks like about %1$d min past the open gate, learned from %2$d nights. It only decides how much tonight is allowed to say about your clock. It never moves the window.</string>
+    <string name="tgb_why_behaviour_wait">Behaviour layer: silent, %1$d nights of %2$d. Below that it fits noise and predicts worse than your own average.</string>
     <string name="tgb_why_light">Light was read as a clock shift over %1$d stretches. Evening light pushes the clock later about eight times harder than morning light pulls it earlier.</string>
     <string name="tgb_export_wait">Building the file.</string>
     <string name="tgb_export_fail">Could not send the file. Try again in a minute.</string>
@@ -334,4 +356,14 @@
     <string name="log_forced">Woken up</string>
     <string name="log_forced_hint">The night was ended by an alarm or by someone else, not by your body.</string>
     <string name="log_forced_on">Marked for this morning.</string>
+    <string name="tgb_cmd_corr">Sleep debt and how to repay it</string>
+    <string name="tgb_corr_unknown">Not enough nights yet to put a number on debt.</string>
+    <string name="tgb_corr_none">No debt: the last night discharged in full.</string>
+    <string name="tgb_corr_window">Comfortable window to fall asleep: %1$s - %2$s.</string>
+    <string name="tgb_corr_debt">Debt: about %1$d min of sleep not paid back.</string>
+    <string name="tgb_corr_rough">The estimate is still rough, there are few nights.</string>
+    <string name="tgb_corr_plan">Plan for %1$d days:</string>
+    <string name="tgb_corr_day">Day %1$d: window %2$s - %3$s, about %4$d min of extra sleep.</string>
+    <string name="tgb_corr_light">Dim the light about two hours before the window. Bright light right after waking up.</string>
+    <string name="tgb_corr_free">No alarm, no fixed length. The window is where sleep comes on its own.</string>
 </resources>

@@ -11,6 +11,7 @@ import dev.vespian.db.Forced
 import dev.vespian.db.Meta
 import dev.vespian.db.Night
 import dev.vespian.export.Export
+import dev.vespian.model.Behaviour
 import dev.vespian.model.Engine
 import dev.vespian.work.Screen
 import dev.vespian.work.SyncWorker
@@ -87,6 +88,7 @@ object Commands {
             "why" -> why(context)
             "export" -> export(context)
             "wakeup" -> wakeup(context)
+            "corr" -> corr(context)
             "status" -> status(context)
             "last" -> last(context)
             "bed" -> bed(context)
@@ -124,6 +126,114 @@ object Commands {
         runCatching { refitSoon(context) }
     }
 
+    // The night was ended by an alarm or by another person. The backup path for
+    // the button on the morning question, for a morning where that message was
+    // never sent or was lost in the chat.
+    //
+    // Without this the model would take an interrupted night as proof that
+    // sleep pressure had fully discharged, which is the one inference the whole
+    // forecast rests on.
+    private suspend fun wakeup(context: Context) {
+        val db = Db.get(context)
+        val wake = db.nights().lastSleepEnd() ?: 0L
+        val date = if (wake > 0L)
+            Instant.ofEpochMilli(wake).atZone(ZoneId.systemDefault()).toLocalDate().toString()
+        else dayKey()
+        runCatching { Forced.set(context, date, true) }
+        Bot.enqueue(
+            context,
+            Lang.string(context, R.string.tg_forced_on),
+            Telegram.keyboard(
+                Telegram.row(Lang.string(context, R.string.tg_forced_undo) to "w:$date:0")
+            ),
+        )
+        runCatching { refitSoon(context) }
+    }
+
+    // Below this the leftover pressure is noise, not a debt worth naming.
+    private const val DEBT_FLOOR_MIN = 20
+
+    // Repayment is capped per day. Recovery sleep is bounded by physiology,
+    // and a plan that promises more than this is a plan that fails on day one.
+    private const val REPAY_PER_DAY_MIN = 60
+
+    // The clock itself can only be pulled earlier by so much in a day.
+    private const val SHIFT_PER_DAY_MIN = 40
+
+    // Never a plan longer than this. Beyond three days the forecast has moved
+    // on and the plan describes a person who no longer exists.
+    private const val MAX_PLAN_DAYS = 3
+
+    // Sleep debt and a short way back. Pull only, never sent on its own: a
+    // schedule that nags is a schedule that gets muted.
+    //
+    // Debt here is not a missing number of hours against some norm. It is the
+    // pressure that had not reached the floor when the night ended. A night
+    // that ended by itself leaves none of it, so most of the time this command
+    // answers that there is nothing to repay, and that is the correct answer.
+    //
+    // Windows only, never a time to be in bed. The body decides the minute.
+    private suspend fun corr(context: Context) {
+        val f = runCatching { Engine.forecast(context) }.getOrNull()
+        if (f == null) {
+            say(context, Lang.string(context, R.string.tgb_no_forecast))
+            return
+        }
+        val debt = runCatching { Engine.load(context).debtBandMinutes() }.getOrNull()
+        if (debt == null || f.nights < 1) {
+            say(context, Lang.string(context, R.string.tgb_corr_unknown))
+            return
+        }
+
+        val sb = StringBuilder()
+        val minutes = Math.round(debt.median).toInt()
+        if (minutes < DEBT_FLOOR_MIN) {
+            sb.append(Lang.string(context, R.string.tgb_corr_none))
+            sb.append("\n")
+            sb.append(
+                Lang.string(context, R.string.tgb_corr_window, hhmm(f.gate.low), hhmm(f.gate.high))
+            )
+            sb.append("\n")
+            sb.append(Lang.string(context, R.string.tgb_corr_free))
+        } else {
+            sb.append(Lang.string(context, R.string.tgb_corr_debt, minutes))
+            // A spread wider than the estimate itself means the discharge speed
+            // is still unknown, so the number is a direction, not a quantity.
+            if (debt.high - debt.low > debt.median) {
+                sb.append("\n")
+                sb.append(Lang.string(context, R.string.tgb_corr_rough))
+            }
+            var left = minutes
+            var days = 0
+            while (left > 0 && days < MAX_PLAN_DAYS) {
+                days += 1
+                left -= REPAY_PER_DAY_MIN
+            }
+            sb.append("\n\n")
+            sb.append(Lang.string(context, R.string.tgb_corr_plan, days))
+            var remaining = minutes
+            for (day in 1..days) {
+                val add = if (remaining > REPAY_PER_DAY_MIN) REPAY_PER_DAY_MIN else remaining
+                remaining -= add
+                val shift = (SHIFT_PER_DAY_MIN * day).coerceAtMost(minutes) / 60.0
+                sb.append("\n")
+                sb.append(
+                    Lang.string(
+                        context,
+                        R.string.tgb_corr_day,
+                        day,
+                        hhmm(f.gate.low - shift),
+                        hhmm(f.gate.high - shift),
+                        add,
+                    )
+                )
+            }
+        }
+        sb.append("\n\n")
+        sb.append(Lang.string(context, R.string.tgb_corr_light))
+        say(context, sb.toString())
+    }
+
     private fun moodName(context: Context, value: Int): String = Lang.string(
         context,
         when (value) {
@@ -150,6 +260,7 @@ object Commands {
                 "why" -> "why"
                 "export", "backup" -> "export"
                 "wakeup", "woken" -> "wakeup"
+                "corr", "debt" -> "corr"
                 "status" -> "status"
                 "last" -> "last"
                 "bed" -> "bed"
@@ -245,6 +356,7 @@ object Commands {
         list.add("status" to c.getString(R.string.tgb_cmd_status))
         list.add("export" to c.getString(R.string.tgb_cmd_export))
         list.add("wakeup" to c.getString(R.string.tgb_cmd_wakeup))
+        list.add("corr" to c.getString(R.string.tgb_cmd_corr))
         list.add("last" to c.getString(R.string.tgb_cmd_last))
         list.add("mode" to c.getString(R.string.tgb_cmd_mode))
         list.add("lang" to c.getString(R.string.tgb_cmd_lang))
@@ -327,24 +439,6 @@ object Commands {
         return sb.toString()
     }
 
-    // Fallback for a morning where the question scrolled out of the chat. It
-    // marks the night the band last recorded, the same night the app button
-    // touches, so the two can never disagree.
-    private suspend fun wakeup(context: Context) {
-        val date = Forced.currentKey(context)
-        Forced.set(context, date, true)
-        Bot.enqueue(
-            context,
-            Lang.string(context, R.string.tg_forced_on),
-            Telegram.keyboard(
-                Telegram.row(
-                    Lang.string(context, R.string.tg_forced_undo) to "w:$date:0",
-                ),
-            ),
-        )
-        refitSoon(context)
-    }
-
     // A forecast nobody understands is a forecast nobody acts on. This says
     // what the number is built from, in the same order the model builds it.
     private suspend fun why(context: Context) {
@@ -407,6 +501,17 @@ object Commands {
             if (obs.size > 3 && obs[3] > 0) {
                 sb.append("\n")
                 sb.append(Lang.string(context, R.string.tgb_why_light, obs[3]))
+            }
+        }
+        val beh = runCatching { Behaviour.now(context) }.getOrNull()
+        if (beh != null) {
+            val gapMin = beh.first
+            val nights = beh.second
+            sb.append("\n")
+            if (nights >= Behaviour.MIN_NIGHTS) {
+                sb.append(Lang.string(context, R.string.tgb_why_behaviour, gapMin, nights))
+            } else {
+                sb.append(Lang.string(context, R.string.tgb_why_behaviour_wait, nights, Behaviour.MIN_NIGHTS))
             }
         }
         say(context, sb.toString())

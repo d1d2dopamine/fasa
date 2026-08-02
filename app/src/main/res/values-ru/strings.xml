@@ -95,7 +95,7 @@
     <string name="st_hr_found">Пульс: %1$d замеров за 24 часа</string>
     <string name="st_hr_none">Пульс: замеров за 24 часа нет</string>
     <string name="st_hr_coverage_ok">Покрытие пульса: %1$d из 24 часов. Фоновые замеры работают.</string>
-    <string name="st_hr_coverage_low">Покрытие пульса: только %1$d из 24 часов. Либо связь подключена недавно, либо браслет пишет только на тренировках.</string>
+    <string name="st_hr_coverage_low">Покрытие пульса: только %1$d из 24 часов. Либо связь подключена недавно, ��ибо браслет пишет только на тренировках.</string>
 
     <string name="st_spo2_found">Кислород: %1$d записей за 7 дней</string>
     <string name="st_spo2_none">Кислород: записей нет. У Band 9 Active нет датчика SpO2, это нормально.</string>
@@ -197,6 +197,26 @@
     <string name="ob_grant">Выдать</string>
     <string name="ob_allow">Разрешить</string>
     <string name="ob_done">Готово</string>
+    <string name="ob_welcome_title">Веспиан</string>
+    <string name="ob_welcome_body">Веспиан учится понимать, когда ваши внутренние часы откроют дверь ко сну, и говорит об этом заранее. Он предсказывает. Он никогда не указывает, когда ложиться.</string>
+    <string name="ob_start">Начать</string>
+    <string name="ob_next">Далее</string>
+    <string name="ob_mode_title">Как приложение будет работать?</string>
+    <string name="ob_mode_auto">Без рук</string>
+    <string name="ob_mode_auto_body">Сон и пульс приходят с браслета через Health Connect. Нажимать ничего не нужно. Этот режим точнее.</string>
+    <string name="ob_mode_manual">Ручной</string>
+    <string name="ob_mode_manual_body">Браслет не нужен. Вы сами отмечаете, когда уснули и когда проснулись, два нажатия в сутки. Без пульса окно прогноза остаётся шире, и модель дольше нащупывает ваши часы.</string>
+    <string name="ob_mode_pick">Выбрать</string>
+    <string name="ob_mode_switch_later">Режим можно поменять позже в настройках. Ничего не потеряется.</string>
+    <string name="ob_subtitle_manual">Два разрешения. Они нужны чату даже без браслета.</string>
+    <string name="ob_hc_missing">Health Connect не установлен. Это мост от браслета, поставьте его и вернитесь.</string>
+    <string name="ob_hc_update">Health Connect устарел. Обновите его и вернитесь.</string>
+    <string name="ob_hc_install">Установить</string>
+    <string name="ob_source_title">Источник данных</string>
+    <string name="ob_source_checking">Ищем ваш браслет.</string>
+    <string name="ob_source_found">Подключено: %1$s. Сон и пульс будут приходить сами.</string>
+    <string name="ob_source_empty">Пока в Health Connect пусто. Для свежей установки это нормально. Откройте один раз Mi Fitness и синхронизируйте, первая ночь появится сама.</string>
+    <string name="ob_source_manual">Ручной режим. Браслет не читается. Сон и пробуждение вы отмечаете сами, в приложении или в чате.</string>
 
     <string name="tgb_start">Vespian bot is running. Choose the chat language.</string>
     <string name="tgb_lang_ask">Язык чата?</string>
@@ -264,7 +284,7 @@
     <string name="tgb_last_none">Записей пока нет.</string>
     <string name="tgb_phases_none">Фазы: не измерялись</string>
     <string name="nt_down_title">Веспиан был остановлен системой</string>
-    <string name="nt_down_text">Фоновая работа была заморожена %1$d минут, ответы в Telegram приходили с опозданием. Разрешите автозапуск и работу в фоне для Веспиана в системных настройках батареи.</string>
+    <string name="nt_down_text">Фоновая работа была заморожена %1$d минут, ответы �� Telegram приходили с опозданием. Разрешите автозапуск и работу в фоне для Веспиана в системных настройках батареи.</string>
     <string name="save">Сохранить</string>
     <string name="saved">Сохранено</string>
     <string name="settings_group_app">Приложение</string>
@@ -309,7 +329,7 @@
     <string name="log_hint">Работает без интернета. Бот спрашивает то же самое.</string>
     <string name="tgb_cmd_why">На чём построен прогноз</string>
     <string name="tgb_cmd_export">Прислать все данные файлом</string>
-    <string name="tgb_help_extra">/why - на чём построен прогноз\n/export - все ваши данные одним файлом\n/wakeup - последнее утро оборвал будильник или человек</string>
+    <string name="tgb_help_extra">/why - на чём построен прогноз\n/export - все ваши данные одним файлом\n/wakeup - последнее утро оборвал будильник или человек\n/corr - долг сна и короткий план</string>
     <string name="tgb_why_head">Окно сна открывается около %1$s. Засыпание около %2$s.</string>
     <string name="tgb_why_latency">На засыпание у вас уходит около %1$d мин.</string>
     <string name="tgb_why_wake">Тело будет готово проснуться около %1$s.</string>
@@ -322,6 +342,8 @@
     <string name="tgb_why_trust_low">Данных пока мало, ночей: %1$d. Это грубая прикидка.</string>
     <string name="tgb_why_basis">Построено на %1$d ночах, где окно сна измерено честно, и %2$d ночах, где вы уснули сразу - такие ночи говорят только то, что окно было уже открыто.</string>
     <string name="tgb_why_anchor">Ночной минимум пульса взят как якорь внутренних часов в %1$d ночах. Он не зависит от того, во сколько вы решили лечь.</string>
+    <string name="tgb_why_behaviour">Поведенческий слой: этот вечер похож примерно на %1$d мин сверх открытого окна, обучен на %2$d ночах. Он решает только то, насколько сильно сегодняшняя ночь влияет на оценку ваших часов. Окно он не двигает.</string>
+    <string name="tgb_why_behaviour_wait">Поведенческий слой молчит: %1$d ночей из %2$d. Раньше он ловит случайности и предсказывает хуже, чем ваше собственное среднее.</string>
     <string name="tgb_why_light">Свет учтён как сдвиг часов на %1$d отрезках. Вечерний свет отодвигает часы позже примерно в восемь раз сильнее, чем утренний тянет раньше.</string>
     <string name="tgb_export_wait">Собираю файл.</string>
     <string name="tgb_export_fail">Не удалось отправить файл. Попробуйте через минуту.</string>
@@ -334,4 +356,14 @@
     <string name="log_forced">Разбудили</string>
     <string name="log_forced_hint">Ночь оборвал будильник или человек, а не тело.</string>
     <string name="log_forced_on">Отмечено на это утро.</string>
+    <string name="tgb_cmd_corr">Долг сна и как его вернуть</string>
+    <string name="tgb_corr_unknown">Ночей пока мало, долг цифрой назвать не могу.</string>
+    <string name="tgb_corr_none">Долга нет: прошлая ночь разрядилась полностью.</string>
+    <string name="tgb_corr_window">Комфортное окно, чтобы уснуть: %1$s - %2$s.</string>
+    <string name="tgb_corr_debt">Долг: около %1$d мин невозвращённого сна.</string>
+    <string name="tgb_corr_rough">Оценка пока грубая, ночей мало.</string>
+    <string name="tgb_corr_plan">План на %1$d дн.:</string>
+    <string name="tgb_corr_day">День %1$d: окно %2$s - %3$s, примерно %4$d мин сна сверху.</string>
+    <string name="tgb_corr_light">Приглушите свет примерно за два часа до окна. Сразу после подъёма - яркий свет.</string>
+    <string name="tgb_corr_free">Без будильника и ��ез нормы часов. Окно - это когда сон приходит сам.</string>
 </resources>

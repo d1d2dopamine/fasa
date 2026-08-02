@@ -144,12 +144,19 @@ data class Particle(
     var latency: Double,
     var lightGain: Double,
     var weight: Double,
-    // Sleep pressure left over at the last wake up.
-    //
-    // Resetting this to the floor every morning would assert that every night
-    // ended fully rested, which is exactly what does not happen when a night is
-    // cut short. Carrying it forward is what makes a short night push the next
-    // sleep gate earlier instead of vanishing without trace.
+    /**
+     * Sleep pressure left over at the last wake up.
+     *
+     * Every night used to start from the floor, which quietly assumed that the
+     * person woke up fully rested no matter how the night had gone. After a
+     * short night that is false: pressure is still high, the gate opens sooner,
+     * and a model that resets to the floor reads that early sleep as a shifted
+     * body clock instead of as a debt. Carrying the remainder forward keeps the
+     * two apart.
+     *
+     * [Physics.L0] means fully discharged. Anything above it is debt, in the
+     * same units the rest of the model already speaks.
+     */
     var sWake: Double = Physics.L0,
 )
 

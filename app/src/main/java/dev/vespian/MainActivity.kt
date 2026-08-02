@@ -450,8 +450,9 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
         }
         mugs = a?.mugs ?: 0
         mood = a?.mood
-        forcedKey = Forced.currentKey(context)
-        forced = Forced.has(context, forcedKey)
+        val key = Forced.currentKey(context)
+        forcedKey = key
+        forced = Forced.has(context, key)
     }
 
     SectionCard {
@@ -530,41 +531,51 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(12.dp))
-        // A night ended by an alarm or by another person is not evidence that
-        // the body was finished, so the model must be told. One tap, undo next
-        // to it, no confirmation dialog for something done every morning.
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (forced) {
-                TextButton(onClick = {
-                    forced = false
-                    scope.launch {
-                        Forced.set(context, forcedKey, false)
-                        Commands.refitSoon(context)
-                        onChanged()
-                    }
-                }) {
-                    Text(stringResource(R.string.log_undo))
+        // Applied on the first tap, undone on the second. No confirmation: this
+        // is pressed by someone who has just been woken up, and a dialog every
+        // morning costs more than the rare mis-tap it would prevent.
+        if (forced) {
+            Button(onClick = {
+                forced = false
+                scope.launch {
+                    Forced.set(context, forcedKey, false)
+                    Engine.invalidate()
+                    onChanged()
                 }
-            } else {
-                OutlinedButton(onClick = {
-                    forced = true
-                    scope.launch {
-                        Forced.set(context, forcedKey, true)
-                        Commands.refitSoon(context)
-                        onChanged()
-                    }
-                }) {
-                    Icon(Icons.Filled.Alarm, contentDescription = null)
-                    Spacer(Modifier.size(8.dp))
-                    Text(stringResource(R.string.log_forced))
+            }) {
+                Icon(Icons.Filled.Alarm, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text(stringResource(R.string.log_forced))
+            }
+            TextButton(onClick = {
+                forced = false
+                scope.launch {
+                    Forced.set(context, forcedKey, false)
+                    Engine.invalidate()
+                    onChanged()
                 }
+            }) {
+                Text(stringResource(R.string.log_undo))
+            }
+        } else {
+            OutlinedButton(onClick = {
+                forced = true
+                scope.launch {
+                    Forced.set(context, forcedKey, true)
+                    Engine.invalidate()
+                    onChanged()
+                }
+            }) {
+                Icon(Icons.Filled.Alarm, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text(stringResource(R.string.log_forced))
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(4.dp))
         Text(
             text = if (forced) stringResource(R.string.log_forced_on)
             else stringResource(R.string.log_forced_hint),
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(8.dp))

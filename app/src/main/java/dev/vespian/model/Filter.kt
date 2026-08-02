@@ -5,6 +5,7 @@ import dev.vespian.db.Night
 import org.json.JSONArray
 import kotlin.math.abs
 import kotlin.math.exp
+import kotlin.math.ln
 import kotlin.random.Random
 
 // Sequential Monte Carlo over the two-process model.
@@ -33,6 +34,17 @@ class Filter(val particles: MutableList<Particle>) {
 
         // Sigma on the nightly heart rate minimum as a phase marker, in hours.
         const val NADIR_SIGMA_H = 1.5
+
+        // How much of the morning answer the model is allowed to believe. Self
+        // report is noisy and carries plenty that has nothing to do with sleep,
+        // so this sigma is wide on purpose. Wellbeing nudges the cloud, it
+        // never decides a night on its own.
+        const val MOOD_SIGMA = 1.5
+
+        // Mood points lost per hour of pressure still left at wake up, and the
+        // score a fully discharged morning is expected to produce.
+        const val MOOD_PER_HOUR = 1.0
+        const val MOOD_BEST = 5.0
 
         // A single stretch of light may not move the whole cloud further than
         // this. A stuck or blinded sensor is a plausible failure; two hours of
@@ -110,7 +122,8 @@ class Filter(val particles: MutableList<Particle>) {
                     lightGain = p.getDouble(5),
                     weight = p.getDouble(6),
                     // Clouds saved before pressure was carried between nights
-                    // have seven fields; they start again from the floor.
+                    // hold seven fields. Starting them from the floor is what
+                    // the old maths assumed anyway.
                     sWake = if (p.length() > 7) p.getDouble(7) else Physics.L0,
                 )
             }
@@ -123,7 +136,8 @@ class Filter(val particles: MutableList<Particle>) {
         for (p in particles) {
             val one = JSONArray()
             one.put(p.tau); one.put(p.phi); one.put(p.tauRise); one.put(p.tauFall)
-            one.put(p.latency); one.put(p.lightGain); one.put(p.weight); one.put(p.sWake)
+            one.put(p.latency); one.put(p.lightGain); one.put(p.weight)
+            one.put(p.sWake)
             arr.put(one)
         }
         return arr.toString()
@@ -160,10 +174,23 @@ class Filter(val particles: MutableList<Particle>) {
         hrMinHour: Double? = null,
         nadirScale: Double = 1.0,
         forcedWake: Boolean = false,
+        mood: Int? = null,
+        onsetScale: Double = 1.0,
     ) {
         val duration = sleepEndHour - sleepStartHour
         if (duration <= 0.0 || duration > 16.0) return
-        val sOnset = 1.2 * sigmaScale
+        // The behavioural layer widens this on evenings that look like the ones
+        // this person usually spends awake past an open gate. A night that was
+        // late by choice still says something about the body clock, just much
+        // less, and pretending otherwise is what pushes the estimated period
+        // out towards its ceiling. Nothing else in the night is widened: the
+        // duration, the pulse anchor and the morning answer are all physiology
+        // and stay at full strength.
+        val sOnset = 1.2 * sigmaScale * onsetScale.coerceIn(1.0, Behaviour.MAX_WIDEN)
+        // Wake time is scored from the onset the band measured, not from the
+        // predicted one, so it carries none of the guesswork in [wokeAtHour].
+        // That is why it is not widened by sigmaScale: the duration of the
+        // first stored night is as trustworthy as any other night's.
         val sDur = 1.5
         val sLat = LATENCY_SIGMA_MIN * sigmaScale
         // A clock anchor read off a well fitted daily curve deserves more trust
@@ -186,8 +213,13 @@ class Filter(val particles: MutableList<Particle>) {
         val measuredLatency = if (gapMin != null && !censored && gapMin <= 180.0) gapMin else null
 
         for (p in particles) {
+            // Pressure starts where the last night left it, not at the floor.
             val predictedGate = gateFrom(p, wokeAtHour, p.sWake, caffeineMg)
             val predictedOnset = predictedGate + p.latency / 60.0
+            // Walked down from the onset the band recorded. Building this on
+            // the predicted onset stacked one guess on another and, on a night
+            // with no measured previous wake up, discarded the measured
+            // duration almost entirely.
             val predictedWake = wakeFrom(p, sleepStartHour)
 
             var e2 = 0.0
@@ -205,13 +237,10 @@ class Filter(val particles: MutableList<Particle>) {
                 e2 += e * e
             }
 
-            // Duration is scored from the onset the band actually measured, so
-            // an error in the predicted onset is not charged twice.
-            //
-            // A night ended by an alarm or by another person only says the body
-            // would have slept at least this long. Hypotheses predicting a
-            // later wake up are not contradicted by it, so only an earlier
-            // prediction costs anything. Mirror image of the onset censoring.
+            // Being woken is a censored observation from the far end of the
+            // night: the body would have slept at least this long and possibly
+            // longer. Only a hypothesis claiming an earlier wake up is
+            // contradicted by it, so only that direction is penalised.
             val eWake = (predictedWake - sleepEndHour) / sDur
             if (!forcedWake || eWake < 0.0) e2 += eWake * eWake
 
@@ -225,8 +254,30 @@ class Filter(val particles: MutableList<Particle>) {
                 e2 += e * e
             }
 
+            // Whatever this night failed to discharge is tomorrow's starting
+            // point. This is what keeps a short night from being read as a
+            // shifted body clock.
+            val sAfter = pressureAfter(p, sleepStartHour, sleepEndHour)
+
+            // The morning answer is a reading of exactly that leftover
+            // pressure. A hypothesis claiming the night discharged in full has
+            // to explain a person who woke up wrecked, and one claiming a lot
+            // was left has to explain a person who woke up fresh. Until now the
+            // answer was stored and never used, so those two hypotheses looked
+            // identical to the filter.
+            if (mood != null && mood >= 1 && mood <= 5) {
+                val debtHours = if (sAfter > Physics.L0) {
+                    p.tauFall * ln(sAfter / Physics.L0)
+                } else {
+                    0.0
+                }
+                val expected = (MOOD_BEST - MOOD_PER_HOUR * debtHours).coerceIn(1.0, 5.0)
+                val e = (expected - mood.toDouble()) / MOOD_SIGMA
+                e2 += e * e
+            }
+
             p.weight *= exp(-0.5 * e2) + 1e-12
-            p.sWake = pressureAfter(p, sleepStartHour, sleepEndHour)
+            p.sWake = sAfter
         }
         normalize()
         if (ess() < RESAMPLE_BELOW) resample()
@@ -340,30 +391,14 @@ class Filter(val particles: MutableList<Particle>) {
         return limit
     }
 
-    // Where sleep pressure actually stood at the moment this person got up.
-    // A night cut short leaves it above the floor, and that leftover is what
-    // carries into the next day instead of being written off.
-    fun pressureAfter(p: Particle, onsetHour: Double, wakeHour: Double): Double {
-        var s = Physics.H0 + Physics.AMP * Physics.circadian(onsetHour, p.phi, p.tau)
-        var t = onsetHour
-        while (t < wakeHour) {
-            s = Physics.fall(s, STEP_H, p.tauFall)
-            t += STEP_H
+    // Where the cloud currently thinks the gate opens, given a wake up and a
+    // caffeine load. The behavioural layer measures its gap against this.
+    fun gateMedian(wokeAtHour: Double, caffeineMg: Double): Double {
+        val values = DoubleArray(particles.size) { i ->
+            val p = particles[i]
+            gateFrom(p, wokeAtHour, p.sWake, caffeineMg)
         }
-        return s.coerceAtLeast(Physics.L0)
-    }
-
-    // Weighted mean of the pressure left above the floor at the last wake up.
-    // Zero means the body finished the discharge by itself.
-    fun debtPressure(): Double {
-        var sum = 0.0
-        var w = 0.0
-        for (p in particles) {
-            sum += p.weight * (p.sWake - Physics.L0)
-            w += p.weight
-        }
-        if (w <= 0.0) return 0.0
-        return (sum / w).coerceAtLeast(0.0)
+        return band(values).median
     }
 
     // Walk pressure down from sleep onset until it drops below the wake threshold.
@@ -377,6 +412,47 @@ class Filter(val particles: MutableList<Particle>) {
             t += STEP_H
         }
         return limit
+    }
+
+    // Pressure still left at the end of a night that actually happened.
+    //
+    // Discharge is walked across the measured hours rather than until the
+    // threshold is reached, because the whole point is what a cut short night
+    // leaves behind. The floor is the fully rested level, so anything above it
+    // is debt, and a night long enough to reach it produces none.
+    fun pressureAfter(p: Particle, onsetHour: Double, wakeHour: Double): Double {
+        var s = Physics.H0 + Physics.AMP * Physics.circadian(onsetHour, p.phi, p.tau)
+        var t = onsetHour
+        while (t < wakeHour) {
+            s = Physics.fall(s, STEP_H, p.tauFall)
+            t += STEP_H
+        }
+        return s.coerceAtLeast(Physics.L0)
+    }
+
+    // Sleep debt as the cloud currently sees it, in units of pressure. Zero
+    // means every hypothesis thinks the last night discharged completely.
+    fun debtPressure(): Double {
+        var acc = 0.0
+        for (p in particles) acc += p.weight * (p.sWake - Physics.L0)
+        return acc.coerceAtLeast(0.0)
+    }
+
+    // The same leftover pressure expressed as time: how much longer the body
+    // would have had to stay asleep for the pressure to reach the floor.
+    //
+    // The fall of pressure is exponential, so the answer has a closed form and
+    // does not need stepping. Each hypothesis has its own discharge speed, so
+    // the spread of the band is a direct readout of how well that speed is
+    // known yet. A wide band here is the honest signal that debt cannot be
+    // quoted as a single number.
+    fun debtBandMinutes(): Band {
+        val values = DoubleArray(particles.size) { i ->
+            val p = particles[i]
+            val ratio = p.sWake / Physics.L0
+            if (ratio <= 1.0) 0.0 else 60.0 * p.tauFall * ln(ratio)
+        }
+        return band(values)
     }
 
     // Latest onset that still reaches [targetWake] with the body ready to wake.

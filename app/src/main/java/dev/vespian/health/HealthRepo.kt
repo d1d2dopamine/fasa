@@ -87,6 +87,57 @@ object HealthRepo {
     }
 
     /**
+     * What actually wrote the data we are about to read.
+     *
+     * Health Connect does not expose paired devices, so nothing here talks to
+     * the band over Bluetooth. Every record simply carries the writer in its
+     * metadata: the maker and model of the tracker when the source app filled
+     * that in, and always the package name of the app itself. Sleep is checked
+     * first because that is the record the model lives on; heart rate is the
+     * fallback for the hours before the first night exists.
+     *
+     * Returns null when Health Connect holds nothing from the last month, which
+     * on a fresh install is the normal case rather than an error.
+     */
+    suspend fun source(context: Context): String? {
+        val client = client(context) ?: return null
+        if (!grantedSet(context).containsAll(CORE)) return null
+        val now = Instant.now()
+        val window = TimeRangeFilter.between(now.minus(29, ChronoUnit.DAYS), now)
+
+        val sleepMeta = runCatching {
+            client.readRecords(
+                ReadRecordsRequest(SleepSessionRecord::class, timeRangeFilter = window)
+            ).records.lastOrNull()?.metadata
+        }.getOrNull()
+
+        val meta = sleepMeta ?: runCatching {
+            client.readRecords(
+                ReadRecordsRequest(HeartRateRecord::class, timeRangeFilter = window)
+            ).records.lastOrNull()?.metadata
+        }.getOrNull() ?: return null
+
+        val maker = runCatching { meta.device?.manufacturer }.getOrNull()?.trim().orEmpty()
+        val model = runCatching { meta.device?.model }.getOrNull()?.trim().orEmpty()
+        val named = listOf(maker, model).filter { it.isNotEmpty() }.joinToString(" ")
+        if (named.isNotEmpty()) return named
+
+        // No tracker details. The writing app is still worth naming, and its
+        // package is the only thing Health Connect always fills in.
+        val pkg = runCatching { meta.dataOrigin.packageName }.getOrNull().orEmpty()
+        return appName(context, pkg)
+    }
+
+    private fun appName(context: Context, pkg: String): String? {
+        if (pkg.isEmpty()) return null
+        val pm = context.packageManager
+        val label = runCatching {
+            pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+        }.getOrNull()
+        return label?.takeIf { it.isNotBlank() } ?: pkg
+    }
+
+    /**
      * Reads sleep sessions plus the heart rate and SpO2 inside each session,
      * and stores one row per night.
      */

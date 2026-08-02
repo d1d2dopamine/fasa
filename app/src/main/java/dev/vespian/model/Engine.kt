@@ -67,8 +67,10 @@ object Engine {
     // 3 light phase response curve and data seeded prior
     // 4 fitted daily pulse curve as the anchor, harmonic circadian shape
     // 5 sleep pressure carried between nights, duration scored from the
-    //   measured onset, interrupted nights read as at least this long
-    const val MODEL_VERSION = 5
+    //   measured onset
+    // 6 morning wellbeing read as evidence about the pressure left at wake up
+    // 7 behavioural layer weighs how much each night says about the body clock
+    const val MODEL_VERSION = 7
     const val KEY_MODEL_VERSION = "model_version"
 
     // ---- caches ----------------------------------------------------------
@@ -113,18 +115,20 @@ object Engine {
 
         val nights = withContext(Dispatchers.IO) { db.nights().all() }
         // One query instead of one per night.
-        val mugsByDate = withContext(Dispatchers.IO) {
-            db.answers().last(10_000).associate { it.dateKey to (it.mugs ?: 0) }
-        }
+        val answers = withContext(Dispatchers.IO) { db.answers().last(10_000) }
+        val mugsByDate = answers.associate { it.dateKey to (it.mugs ?: 0) }
+
+        // The morning wellbeing answer, kept apart from the mugs because it is
+        // optional and often missing. Where it exists it is evidence about how
+        // much pressure the night failed to discharge.
+        val moodByDate = answers.mapNotNull { a -> a.mood?.let { a.dateKey to it } }.toMap()
         // Read once: the user can change what a mug means in Settings.
         val mgPerMug = Prefs.mgPerMug(context).toDouble()
 
-        // Mornings that ended by an alarm or by another person. Without this an
-        // interrupted night would be read as proof the body was finished, which
-        // is the single inference the whole forecast rests on.
-        val forcedKeys = withContext(Dispatchers.IO) {
-            runCatching { Forced.all(context) }.getOrDefault(emptySet())
-        }
+        // Mornings that were ended by an alarm or by another person. On those
+        // nights the body did not decide when to stop, so the length of the
+        // night says "at least this much" rather than "exactly this much".
+        val forcedKeys = runCatching { Forced.all(context) }.getOrDefault(emptySet())
 
         // The moments the screen went dark. Without them a late onset cannot be
         // told apart from a late decision to go to bed.
@@ -148,6 +152,17 @@ object Engine {
                 .getOrDefault(emptyList())
         }
 
+        // The behavioural layer as it stood before this refit. It is used to
+        // weigh the nights of this pass and refitted from them afterwards.
+        // Using the fresh fit on the very nights it was built from would let
+        // the layer justify itself, which is how a model ends up confidently
+        // wrong.
+        val behaviourFit = runCatching { Behaviour.load(context) }.getOrNull()
+        val gapRows = ArrayList<DoubleArray>()
+        val gapValues = ArrayList<Double>()
+        var tonightFeatures: DoubleArray? = null
+        val zone = ZoneId.systemDefault()
+
         var obsMeasured = 0
         var obsCensored = 0
         var obsAnchored = 0
@@ -156,6 +171,7 @@ object Engine {
         val filter = withContext(Dispatchers.Default) {
             val nowHour = hourOf(System.currentTimeMillis(), offset)
             val lightHours = lightRows.map { doubleArrayOf(hourOf(it.at, offset), it.lux.toDouble()) }
+            val screenHours = screenEvents.map { hourOf(it, offset) }
 
             // Place the starting cloud on the first real night instead of on a
             // population average. The circadian low is taken from the nightly
@@ -183,6 +199,7 @@ object Engine {
             val f = Filter.prior(nowHour, seedNadir)
 
             var previousEnd: Double? = null
+            var previousDuration: Double? = null
             for (night in nights) {
                 val start = hourOf(night.sleepStart, offset)
                 val end = hourOf(night.sleepEnd, offset)
@@ -239,11 +256,36 @@ object Engine {
                     }
                 }
 
+                // The behavioural read of this evening. Taken before the night
+                // is scored, and the gap is measured against the gate the cloud
+                // believed in at that moment, which is exactly the information
+                // the layer will have on a live evening. Measuring it against
+                // the gate fitted afterwards would be measuring the layer
+                // against its own answer.
+                val dayOfWeek = Instant.ofEpochMilli(night.sleepStart).atZone(zone).dayOfWeek.value
+                val evening = Behaviour.features(
+                    start,
+                    screenHours,
+                    previousDuration,
+                    hrHours,
+                    weekend = dayOfWeek == 5 || dayOfWeek == 6,
+                )
+                if (known != null) {
+                    val gap = (start - f.gateMedian(wokeAt, caffeine)) * 60.0
+                    if (gap >= 0.0 && gap <= Behaviour.MAX_GAP_MIN) {
+                        gapRows.add(evening)
+                        gapValues.add(gap)
+                    }
+                }
+
                 f.observe(
                     start, end, wokeAt, caffeine, sigmaScale, bedHour, hrHour, nadirScale,
-                    forcedKeys.contains(night.dateKey),
+                    forcedWake = forcedKeys.contains(night.dateKey),
+                    mood = moodByDate[night.dateKey],
+                    onsetScale = Behaviour.widenFor(behaviourFit, evening),
                 )
                 previousEnd = end
+                previousDuration = end - start
             }
 
             // Today counts too. The light since the last wake up has already
@@ -260,8 +302,26 @@ object Engine {
                 val idleDays = (nowHour - lastEnd) / 24.0
                 if (idleDays > 1.0) f.advanceDays(idleDays - 1.0)
             }
+
+            // The evening in progress, read with the same code path as every
+            // stored night so a live risk and a historical one mean the same
+            // thing.
+            val today = LocalDate.now(zone).dayOfWeek.value
+            tonightFeatures = Behaviour.features(
+                nowHour,
+                screenHours,
+                previousDuration,
+                hrHours,
+                weekend = today == 5 || today == 6,
+            )
             f
         }
+
+        // Refit the behavioural layer over every night of this pass, then read
+        // the evening in progress through it. Below its minimum the fit returns
+        // null, the stored fit is cleared and the layer says nothing at all.
+        val newFit = runCatching { Behaviour.fit(gapRows, gapValues) }.getOrNull()
+        val tonightGap = tonightFeatures?.let { row -> newFit?.predict(row) }
 
         val stamp = System.currentTimeMillis()
         withContext(Dispatchers.IO) {
@@ -269,6 +329,14 @@ object Engine {
             db.meta().put(Meta(KEY_OFFSET, offset.toString()))
             db.meta().put(Meta(KEY_OBS, "$obsMeasured|$obsCensored|$obsAnchored|$obsLight"))
             db.meta().put(Meta(KEY_MODEL_VERSION, MODEL_VERSION.toString()))
+        }
+        runCatching {
+            Behaviour.save(context, newFit)
+            Behaviour.saveNow(
+                context,
+                gapMin = (tonightGap ?: 0.0).toInt(),
+                nights = newFit?.nights ?: gapRows.size,
+            )
         }
 
         filterCache = filter

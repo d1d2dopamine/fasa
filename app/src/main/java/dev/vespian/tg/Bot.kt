@@ -223,29 +223,34 @@ object Bot {
             return
         }
 
-        // "w:<date>:1" marks the night as ended by an alarm or by another
-        // person, "w:<date>:0" takes it back. One tap either way, no dialog.
+        // The night was ended by an alarm or by another person rather than by
+        // the body. Applied immediately: this is tapped by someone who has just
+        // woken up, and a confirmation dialog every morning costs more than the
+        // rare mis-tap it would prevent. The undo button below is the safety
+        // net, and it is one tap as well.
         if (data.startsWith("w:")) {
             val p = data.split(":")
             if (p.size == 3) {
                 val on = p[2] == "1"
-                Forced.set(context, p[1], on)
-                val messageId = cb.optJSONObject("message")?.optInt("message_id")
+                runCatching { Forced.set(context, p[1], on) }
                 if (on) {
                     enqueue(
                         context,
                         Lang.string(context, R.string.tg_forced_on),
                         Telegram.keyboard(
                             Telegram.row(
-                                Lang.string(context, R.string.tg_forced_undo) to "w:${p[1]}:0",
-                            ),
+                                Lang.string(context, R.string.tg_forced_undo) to "w:${p[1]}:0"
+                            )
                         ),
                     )
-                } else if (messageId != null && messageId != 0) {
-                    Telegram.editText(
-                        token, chat, messageId,
-                        Lang.string(context, R.string.tg_forced_off),
-                    )
+                } else {
+                    val mid = cb.optJSONObject("message")?.optInt("message_id")
+                    if (mid != null && mid != 0) {
+                        Telegram.editText(
+                            token, chat, mid,
+                            Lang.string(context, R.string.tg_forced_off),
+                        )
+                    }
                 }
                 runCatching { Commands.refitSoon(context) }
             }
@@ -376,11 +381,11 @@ object Bot {
         }
     )
 
-    // The morning question is the one message this person reliably sees, so the
-    // interrupted night flag rides along with it instead of waiting for a
-    // command nobody remembers to type.
+    // The morning question carries the "woken up" button with it, on both
+    // variants. Remembering to send a separate command while half awake is not
+    // something to design around; the message that already arrives is.
     private fun forcedRow(context: Context, date: String): JSONArray = Telegram.row(
-        Lang.string(context, R.string.tg_forced_btn) to "w:$date:1",
+        Lang.string(context, R.string.tg_forced_btn) to "w:$date:1"
     )
 
     private fun moodKeyboard(context: Context, date: String): JSONArray = Telegram.keyboard(
