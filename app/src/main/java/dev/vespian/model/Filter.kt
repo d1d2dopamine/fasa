@@ -109,6 +109,9 @@ class Filter(val particles: MutableList<Particle>) {
                     latency = p.getDouble(4),
                     lightGain = p.getDouble(5),
                     weight = p.getDouble(6),
+                    // Clouds saved before pressure was carried between nights
+                    // have seven fields; they start again from the floor.
+                    sWake = if (p.length() > 7) p.getDouble(7) else Physics.L0,
                 )
             }
             if (list.isEmpty()) null else Filter(list)
@@ -120,7 +123,7 @@ class Filter(val particles: MutableList<Particle>) {
         for (p in particles) {
             val one = JSONArray()
             one.put(p.tau); one.put(p.phi); one.put(p.tauRise); one.put(p.tauFall)
-            one.put(p.latency); one.put(p.lightGain); one.put(p.weight)
+            one.put(p.latency); one.put(p.lightGain); one.put(p.weight); one.put(p.sWake)
             arr.put(one)
         }
         return arr.toString()
@@ -156,11 +159,12 @@ class Filter(val particles: MutableList<Particle>) {
         bedHour: Double? = null,
         hrMinHour: Double? = null,
         nadirScale: Double = 1.0,
+        forcedWake: Boolean = false,
     ) {
         val duration = sleepEndHour - sleepStartHour
         if (duration <= 0.0 || duration > 16.0) return
         val sOnset = 1.2 * sigmaScale
-        val sDur = 1.5 * sigmaScale
+        val sDur = 1.5
         val sLat = LATENCY_SIGMA_MIN * sigmaScale
         // A clock anchor read off a well fitted daily curve deserves more trust
         // than one read off a noisy day. The caller widens or narrows this
@@ -182,9 +186,9 @@ class Filter(val particles: MutableList<Particle>) {
         val measuredLatency = if (gapMin != null && !censored && gapMin <= 180.0) gapMin else null
 
         for (p in particles) {
-            val predictedGate = gateFrom(p, wokeAtHour, Physics.L0, caffeineMg)
+            val predictedGate = gateFrom(p, wokeAtHour, p.sWake, caffeineMg)
             val predictedOnset = predictedGate + p.latency / 60.0
-            val predictedWake = wakeFrom(p, predictedOnset)
+            val predictedWake = wakeFrom(p, sleepStartHour)
 
             var e2 = 0.0
 
@@ -201,9 +205,15 @@ class Filter(val particles: MutableList<Particle>) {
                 e2 += e * e
             }
 
-            // 1.5 h sigma on duration, widened by sigmaScale.
-            val eDur = ((predictedWake - predictedOnset) - duration) / sDur
-            e2 += eDur * eDur
+            // Duration is scored from the onset the band actually measured, so
+            // an error in the predicted onset is not charged twice.
+            //
+            // A night ended by an alarm or by another person only says the body
+            // would have slept at least this long. Hypotheses predicting a
+            // later wake up are not contradicted by it, so only an earlier
+            // prediction costs anything. Mirror image of the onset censoring.
+            val eWake = (predictedWake - sleepEndHour) / sDur
+            if (!forcedWake || eWake < 0.0) e2 += eWake * eWake
 
             if (measuredLatency != null) {
                 val e = (p.latency - measuredLatency) / sLat
@@ -216,6 +226,7 @@ class Filter(val particles: MutableList<Particle>) {
             }
 
             p.weight *= exp(-0.5 * e2) + 1e-12
+            p.sWake = pressureAfter(p, sleepStartHour, sleepEndHour)
         }
         normalize()
         if (ess() < RESAMPLE_BELOW) resample()
@@ -329,6 +340,32 @@ class Filter(val particles: MutableList<Particle>) {
         return limit
     }
 
+    // Where sleep pressure actually stood at the moment this person got up.
+    // A night cut short leaves it above the floor, and that leftover is what
+    // carries into the next day instead of being written off.
+    fun pressureAfter(p: Particle, onsetHour: Double, wakeHour: Double): Double {
+        var s = Physics.H0 + Physics.AMP * Physics.circadian(onsetHour, p.phi, p.tau)
+        var t = onsetHour
+        while (t < wakeHour) {
+            s = Physics.fall(s, STEP_H, p.tauFall)
+            t += STEP_H
+        }
+        return s.coerceAtLeast(Physics.L0)
+    }
+
+    // Weighted mean of the pressure left above the floor at the last wake up.
+    // Zero means the body finished the discharge by itself.
+    fun debtPressure(): Double {
+        var sum = 0.0
+        var w = 0.0
+        for (p in particles) {
+            sum += p.weight * (p.sWake - Physics.L0)
+            w += p.weight
+        }
+        if (w <= 0.0) return 0.0
+        return (sum / w).coerceAtLeast(0.0)
+    }
+
     // Walk pressure down from sleep onset until it drops below the wake threshold.
     fun wakeFrom(p: Particle, onsetHour: Double): Double {
         var s = Physics.H0 + Physics.AMP * Physics.circadian(onsetHour, p.phi, p.tau)
@@ -400,7 +437,7 @@ class Filter(val particles: MutableList<Particle>) {
 
         for (i in 0 until n) {
             val p = particles[i]
-            val g = gateFrom(p, wokeAtHour, Physics.L0, caffeineMg)
+            val g = gateFrom(p, wokeAtHour, p.sWake, caffeineMg)
             val o = g + p.latency / 60.0
             gates[i] = g
             onsets[i] = o

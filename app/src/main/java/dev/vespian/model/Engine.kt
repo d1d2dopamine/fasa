@@ -3,6 +3,7 @@ package dev.vespian.model
 import android.content.Context
 import dev.vespian.Prefs
 import dev.vespian.db.Db
+import dev.vespian.db.Forced
 import dev.vespian.db.Meta
 import dev.vespian.db.ModelState
 import dev.vespian.work.Screen
@@ -65,7 +66,9 @@ object Engine {
     // 2 censored observations and pulse anchor
     // 3 light phase response curve and data seeded prior
     // 4 fitted daily pulse curve as the anchor, harmonic circadian shape
-    const val MODEL_VERSION = 4
+    // 5 sleep pressure carried between nights, duration scored from the
+    //   measured onset, interrupted nights read as at least this long
+    const val MODEL_VERSION = 5
     const val KEY_MODEL_VERSION = "model_version"
 
     // ---- caches ----------------------------------------------------------
@@ -115,6 +118,13 @@ object Engine {
         }
         // Read once: the user can change what a mug means in Settings.
         val mgPerMug = Prefs.mgPerMug(context).toDouble()
+
+        // Mornings that ended by an alarm or by another person. Without this an
+        // interrupted night would be read as proof the body was finished, which
+        // is the single inference the whole forecast rests on.
+        val forcedKeys = withContext(Dispatchers.IO) {
+            runCatching { Forced.all(context) }.getOrDefault(emptySet())
+        }
 
         // The moments the screen went dark. Without them a late onset cannot be
         // told apart from a late decision to go to bed.
@@ -229,7 +239,10 @@ object Engine {
                     }
                 }
 
-                f.observe(start, end, wokeAt, caffeine, sigmaScale, bedHour, hrHour, nadirScale)
+                f.observe(
+                    start, end, wokeAt, caffeine, sigmaScale, bedHour, hrHour, nadirScale,
+                    forcedKeys.contains(night.dateKey),
+                )
                 previousEnd = end
             }
 

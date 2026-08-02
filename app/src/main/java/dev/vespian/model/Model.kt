@@ -144,6 +144,13 @@ data class Particle(
     var latency: Double,
     var lightGain: Double,
     var weight: Double,
+    // Sleep pressure left over at the last wake up.
+    //
+    // Resetting this to the floor every morning would assert that every night
+    // ended fully rested, which is exactly what does not happen when a night is
+    // cut short. Carrying it forward is what makes a short night push the next
+    // sleep gate earlier instead of vanishing without trace.
+    var sWake: Double = Physics.L0,
 )
 
 // A prediction with an honest uncertainty band.

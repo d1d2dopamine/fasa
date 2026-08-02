@@ -309,7 +309,7 @@
     <string name="log_hint">Работает без интернета. Бот спрашивает то же самое.</string>
     <string name="tgb_cmd_why">На чём построен прогноз</string>
     <string name="tgb_cmd_export">Прислать все данные файлом</string>
-    <string name="tgb_help_extra">/why - на чём построен прогноз\n/export - все ваши данные одним файлом</string>
+    <string name="tgb_help_extra">/why - на чём построен прогноз\n/export - все ваши данные одним файлом\n/wakeup - последнее утро оборвал будильник или человек</string>
     <string name="tgb_why_head">Окно сна открывается около %1$s. Засыпание около %2$s.</string>
     <string name="tgb_why_latency">На засыпание у вас уходит около %1$d мин.</string>
     <string name="tgb_why_wake">Тело будет готово проснуться около %1$s.</string>
@@ -326,4 +326,12 @@
     <string name="tgb_export_wait">Собираю файл.</string>
     <string name="tgb_export_fail">Не удалось отправить файл. Попробуйте через минуту.</string>
     <string name="tgb_export_caption">Ночи, ответы, свет и состояние модели. %1$d КБ. Оставьте это сообщение как резервную копию.</string>
+    <string name="tg_forced_btn">Разбудили</string>
+    <string name="tg_forced_on">Отметил: разбудили. Эта ночь теперь считается как «не меньше этого», а не «ровно столько».</string>
+    <string name="tg_forced_undo">Отменить</string>
+    <string name="tg_forced_off">Отменил. Ночь снова считается свободным пробуждением.</string>
+    <string name="tgb_cmd_wakeup">Отметить, что разбудили</string>
+    <string name="log_forced">Разбудили</string>
+    <string name="log_forced_hint">Ночь оборвал будильник или человек, а не тело.</string>
+    <string name="log_forced_on">Отмечено на это утро.</string>
 </resources>

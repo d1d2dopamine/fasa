@@ -309,7 +309,7 @@
     <string name="log_hint">Works without the internet. The bot asks the same questions.</string>
     <string name="tgb_cmd_why">What the forecast is built on</string>
     <string name="tgb_cmd_export">Send all data as a file</string>
-    <string name="tgb_help_extra">/why - what the forecast is built on\n/export - all your data as one file</string>
+    <string name="tgb_help_extra">/why - what the forecast is built on\n/export - all your data as one file\n/wakeup - the last morning was ended by an alarm or by someone else</string>
     <string name="tgb_why_head">Sleep gate opens around %1$s. Asleep around %2$s.</string>
     <string name="tgb_why_latency">Falling asleep takes you about %1$d min.</string>
     <string name="tgb_why_wake">Body ready to wake around %1$s.</string>
@@ -326,4 +326,12 @@
     <string name="tgb_export_wait">Building the file.</string>
     <string name="tgb_export_fail">Could not send the file. Try again in a minute.</string>
     <string name="tgb_export_caption">Nights, answers, light and model state. %1$d KB. Keep this message as your backup.</string>
+    <string name="tg_forced_btn">Woken up</string>
+    <string name="tg_forced_on">Marked: you were woken up. That night now counts as at least this long, not exactly this long.</string>
+    <string name="tg_forced_undo">Undo</string>
+    <string name="tg_forced_off">Undone. That night counts as a free wake up again.</string>
+    <string name="tgb_cmd_wakeup">Mark that you were woken up</string>
+    <string name="log_forced">Woken up</string>
+    <string name="log_forced_hint">The night was ended by an alarm or by someone else, not by your body.</string>
+    <string name="log_forced_on">Marked for this morning.</string>
 </resources>

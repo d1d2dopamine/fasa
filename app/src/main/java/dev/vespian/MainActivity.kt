@@ -70,6 +70,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.vespian.db.Answer
 import dev.vespian.db.Db
+import dev.vespian.db.Forced
 import dev.vespian.db.Meta
 import dev.vespian.health.HealthRepo
 import dev.vespian.export.Export
@@ -440,6 +441,8 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
     val scope = rememberCoroutineScope()
     var mugs by remember { mutableIntStateOf(0) }
     var mood by remember { mutableStateOf<Int?>(null) }
+    var forced by remember { mutableStateOf(false) }
+    var forcedKey by remember { mutableStateOf("") }
 
     LaunchedEffect(refresh) {
         val a = withContext(Dispatchers.IO) {
@@ -447,6 +450,8 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
         }
         mugs = a?.mugs ?: 0
         mood = a?.mood
+        forcedKey = Forced.currentKey(context)
+        forced = Forced.has(context, forcedKey)
     }
 
     SectionCard {
@@ -521,6 +526,44 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
         Text(
             text = if (picked == null) stringResource(R.string.log_mood_none)
             else stringResource(R.string.log_mood_set, stringResource(moodRes(picked))),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(12.dp))
+        // A night ended by an alarm or by another person is not evidence that
+        // the body was finished, so the model must be told. One tap, undo next
+        // to it, no confirmation dialog for something done every morning.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (forced) {
+                TextButton(onClick = {
+                    forced = false
+                    scope.launch {
+                        Forced.set(context, forcedKey, false)
+                        Commands.refitSoon(context)
+                        onChanged()
+                    }
+                }) {
+                    Text(stringResource(R.string.log_undo))
+                }
+            } else {
+                OutlinedButton(onClick = {
+                    forced = true
+                    scope.launch {
+                        Forced.set(context, forcedKey, true)
+                        Commands.refitSoon(context)
+                        onChanged()
+                    }
+                }) {
+                    Icon(Icons.Filled.Alarm, contentDescription = null)
+                    Spacer(Modifier.size(8.dp))
+                    Text(stringResource(R.string.log_forced))
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = if (forced) stringResource(R.string.log_forced_on)
+            else stringResource(R.string.log_forced_hint),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

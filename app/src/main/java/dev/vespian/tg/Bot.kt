@@ -4,6 +4,7 @@ import android.content.Context
 import dev.vespian.R
 import dev.vespian.db.Answer
 import dev.vespian.db.Db
+import dev.vespian.db.Forced
 import dev.vespian.db.Meta
 import dev.vespian.model.Engine
 import kotlinx.coroutines.Dispatchers
@@ -222,6 +223,35 @@ object Bot {
             return
         }
 
+        // "w:<date>:1" marks the night as ended by an alarm or by another
+        // person, "w:<date>:0" takes it back. One tap either way, no dialog.
+        if (data.startsWith("w:")) {
+            val p = data.split(":")
+            if (p.size == 3) {
+                val on = p[2] == "1"
+                Forced.set(context, p[1], on)
+                val messageId = cb.optJSONObject("message")?.optInt("message_id")
+                if (on) {
+                    enqueue(
+                        context,
+                        Lang.string(context, R.string.tg_forced_on),
+                        Telegram.keyboard(
+                            Telegram.row(
+                                Lang.string(context, R.string.tg_forced_undo) to "w:${p[1]}:0",
+                            ),
+                        ),
+                    )
+                } else if (messageId != null && messageId != 0) {
+                    Telegram.editText(
+                        token, chat, messageId,
+                        Lang.string(context, R.string.tg_forced_off),
+                    )
+                }
+                runCatching { Commands.refitSoon(context) }
+            }
+            return
+        }
+
         val parts = data.split(":")
         if (parts.size != 3) return
         val kind = parts[0]
@@ -251,7 +281,7 @@ object Bot {
 
         // Wellbeing first, coffee second, one question on screen at a time.
         if (kind == "m" && updated.mugs == null) {
-            enqueue(context, Lang.string(context, R.string.tg_q_mugs), mugsKeyboard(date))
+            enqueue(context, Lang.string(context, R.string.tg_q_mugs), mugsKeyboard(context, date))
             markAsked(context)
         } else if (updated.mood != null && updated.mugs != null) {
             clearAsked(context)
@@ -281,9 +311,9 @@ object Bot {
         if (existing?.mood != null && existing.mugs != null) return
 
         if (existing?.mood == null) {
-            enqueue(context, Lang.string(context, R.string.tg_q_mood), moodKeyboard(date))
+            enqueue(context, Lang.string(context, R.string.tg_q_mood), moodKeyboard(context, date))
         } else {
-            enqueue(context, Lang.string(context, R.string.tg_q_mugs), mugsKeyboard(date))
+            enqueue(context, Lang.string(context, R.string.tg_q_mugs), mugsKeyboard(context, date))
         }
         db.meta().put(Meta(K_MORNING, date))
         markAsked(context)
@@ -346,13 +376,22 @@ object Bot {
         }
     )
 
-    private fun moodKeyboard(date: String): JSONArray = Telegram.keyboard(
-        Telegram.row("1" to "m:$date:1", "2" to "m:$date:2", "3" to "m:$date:3"),
-        Telegram.row("4" to "m:$date:4", "5" to "m:$date:5"),
+    // The morning question is the one message this person reliably sees, so the
+    // interrupted night flag rides along with it instead of waiting for a
+    // command nobody remembers to type.
+    private fun forcedRow(context: Context, date: String): JSONArray = Telegram.row(
+        Lang.string(context, R.string.tg_forced_btn) to "w:$date:1",
     )
 
-    private fun mugsKeyboard(date: String): JSONArray = Telegram.keyboard(
+    private fun moodKeyboard(context: Context, date: String): JSONArray = Telegram.keyboard(
+        Telegram.row("1" to "m:$date:1", "2" to "m:$date:2", "3" to "m:$date:3"),
+        Telegram.row("4" to "m:$date:4", "5" to "m:$date:5"),
+        forcedRow(context, date),
+    )
+
+    private fun mugsKeyboard(context: Context, date: String): JSONArray = Telegram.keyboard(
         Telegram.row("0" to "c:$date:0", "1" to "c:$date:1", "2" to "c:$date:2"),
         Telegram.row("3" to "c:$date:3", "4" to "c:$date:4", "5+" to "c:$date:5"),
+        forcedRow(context, date),
     )
 }

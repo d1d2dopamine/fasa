@@ -7,6 +7,7 @@ import dev.vespian.Store
 import dev.vespian.work.LightService
 import dev.vespian.db.Answer
 import dev.vespian.db.Db
+import dev.vespian.db.Forced
 import dev.vespian.db.Meta
 import dev.vespian.db.Night
 import dev.vespian.export.Export
@@ -85,6 +86,7 @@ object Commands {
             "forecast" -> forecast(context)
             "why" -> why(context)
             "export" -> export(context)
+            "wakeup" -> wakeup(context)
             "status" -> status(context)
             "last" -> last(context)
             "bed" -> bed(context)
@@ -147,6 +149,7 @@ object Commands {
                 "forecast" -> "forecast"
                 "why" -> "why"
                 "export", "backup" -> "export"
+                "wakeup", "woken" -> "wakeup"
                 "status" -> "status"
                 "last" -> "last"
                 "bed" -> "bed"
@@ -241,6 +244,7 @@ object Commands {
         list.add("why" to c.getString(R.string.tgb_cmd_why))
         list.add("status" to c.getString(R.string.tgb_cmd_status))
         list.add("export" to c.getString(R.string.tgb_cmd_export))
+        list.add("wakeup" to c.getString(R.string.tgb_cmd_wakeup))
         list.add("last" to c.getString(R.string.tgb_cmd_last))
         list.add("mode" to c.getString(R.string.tgb_cmd_mode))
         list.add("lang" to c.getString(R.string.tgb_cmd_lang))
@@ -321,6 +325,24 @@ object Commands {
         sb.append("\n")
         sb.append(Lang.string(context, R.string.f_nights, f.nights))
         return sb.toString()
+    }
+
+    // Fallback for a morning where the question scrolled out of the chat. It
+    // marks the night the band last recorded, the same night the app button
+    // touches, so the two can never disagree.
+    private suspend fun wakeup(context: Context) {
+        val date = Forced.currentKey(context)
+        Forced.set(context, date, true)
+        Bot.enqueue(
+            context,
+            Lang.string(context, R.string.tg_forced_on),
+            Telegram.keyboard(
+                Telegram.row(
+                    Lang.string(context, R.string.tg_forced_undo) to "w:$date:0",
+                ),
+            ),
+        )
+        refitSoon(context)
     }
 
     // A forecast nobody understands is a forecast nobody acts on. This says
