@@ -190,7 +190,7 @@
     <string name="ob_health">Health Connect</string>
     <string name="ob_health_body">Сон и пульс с браслета.</string>
     <string name="ob_notif">Уведомления</string>
-    <string name="ob_notif_body">Нужны для датчика света и пред��пр��ждений о застое данных.</string>
+    <string name="ob_notif_body">Нужны для датчика света и пр����д��пр��ждений о застое данных.</string>
     <string name="ob_battery">Оптимизация батареи</string>
     <string name="ob_battery_body">Выключи её, иначе ежечасная синхронизация будет убита.</string>
     <string name="ob_autostart">Автозапуск</string>
@@ -413,7 +413,7 @@
     <string name="settings_drinks_alcohol_hint">Считается в дозах, а не в миллилитрах. Алкоголь не приравнивается к кофеину: он сокращает время засыпания и забирает часть восстановления за ночь.</string>
 
     <!-- Settings as a tab of the main screen -->
-    <string name="tab_settings">Настройки</string>
+    <string name="tab_settings">Опции</string>
 
     <!-- Why this forecast, inside the app -->
     <string name="f_why">Почему такой прогноз</string>
@@ -445,4 +445,15 @@
     <string name="widget_gate">Окно откроется в %1$s</string>
     <string name="widget_desc">Окно сна на сегодня одним взглядом.</string>
 
+    <!-- Full backup and restore -->
+    <string name="settings_backup">Резервная копия</string>
+    <string name="backup_hint">Полная копия всего: ночи, ответы, пульс, свет, сама модель и все настройки. Храни её вне телефона. Иначе сброс или новый телефон стоят месяца обучения.</string>
+    <string name="btn_backup_save">Сохранить копию</string>
+    <string name="btn_backup_restore">Восстановить</string>
+    <string name="backup_working">Работаю</string>
+    <string name="backup_saved">Сохранено, %1$d КБ</string>
+    <string name="backup_failed">Не удалось записать файл</string>
+    <string name="restore_done">Восстановлено: ночей %1$d, ответов %2$d, замеров %3$d. Модель пересчитана.</string>
+    <string name="restore_failed">Это не резервная копия vespian</string>
+    <string name="backup_restore_hint">Восстановление дополняет, а не стирает: уже записанная ночь останется на месте, ничего не удаляется. Токен бота в файл не попадает.</string>
 </resources>

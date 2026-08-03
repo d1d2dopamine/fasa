@@ -85,4 +85,8 @@ interface MetaDao {
     // `key` is a reserved word in newer SQLite, it must stay quoted.
     @Query("SELECT value FROM meta WHERE `key` = :key")
     suspend fun get(key: String): String?
+
+    // Everything, for the backup file. The table holds a few dozen rows.
+    @Query("SELECT * FROM meta")
+    suspend fun all(): List<Meta>
 }

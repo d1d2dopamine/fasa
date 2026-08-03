@@ -43,7 +43,11 @@ object Behaviour {
     // Below this the layer stays silent. Not a style choice: see above.
     const val MIN_NIGHTS = 30
 
-    const val N_FEATURES = 4
+    // Five now. The fifth is evening screen time, added once it was clear that
+    // "how many times the phone went dark" and "how long it stayed lit" are not
+    // the same thing: a single unbroken three hour session fragments once and
+    // looks like a calm evening.
+    const val N_FEATURES = 5
 
     // How far back an evening is read, in hours before sleep began.
     const val EVENING_H = 3.0
@@ -111,6 +115,8 @@ object Behaviour {
      * @param prevDurationH length of the previous night, hours, null if unknown
      * @param hrHours pairs of absolute local hour and beats per minute
      * @param weekend true when the evening leads into a day off
+     * @param screenMinutes pairs of absolute local hour and minutes the screen
+     *        was on during the five minute window ending at that hour
      */
     fun features(
         onsetHour: Double,
@@ -118,6 +124,7 @@ object Behaviour {
         prevDurationH: Double?,
         hrHours: List<DoubleArray>,
         weekend: Boolean,
+        screenMinutes: List<DoubleArray> = emptyList(),
     ): DoubleArray {
         val from = onsetHour - EVENING_H
 
@@ -135,11 +142,19 @@ object Behaviour {
         for (row in hrHours) if (row[0] >= from && row[0] <= onsetHour) beats.add(row[1])
         val spread = if (beats.size < 4) 0.0 else sd(beats)
 
+        // 4. Minutes of screen on in the same three hours. Capped at the length
+        //    of the window itself, because a longer number can only be a
+        //    bookkeeping error and would drag the whole fit with it.
+        var lit = 0.0
+        for (row in screenMinutes) if (row[0] >= from && row[0] <= onsetHour) lit += row[1]
+        lit = lit.coerceIn(0.0, EVENING_H * 60.0)
+
         return doubleArrayOf(
             fragments.toDouble(),
             shortfall,
             spread,
             if (weekend) 1.0 else 0.0,
+            lit,
         )
     }
 

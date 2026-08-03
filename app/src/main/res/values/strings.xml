@@ -445,4 +445,15 @@
     <string name="widget_gate">Window opens %1$s</string>
     <string name="widget_desc">Tonight\'s sleep window at a glance.</string>
 
+    <!-- Full backup and restore -->
+    <string name="settings_backup">Backup</string>
+    <string name="backup_hint">A complete copy of everything: nights, answers, pulse, light, the model itself and every setting. Keep it outside the phone. A factory reset or a new phone costs you a month of learning otherwise.</string>
+    <string name="btn_backup_save">Save a copy</string>
+    <string name="btn_backup_restore">Restore</string>
+    <string name="backup_working">Working</string>
+    <string name="backup_saved">Saved, %1$d KB</string>
+    <string name="backup_failed">Could not write the file</string>
+    <string name="restore_done">Restored: %1$d nights, %2$d answers, %3$d readings. The model was refitted.</string>
+    <string name="restore_failed">That file is not a vespian backup</string>
+    <string name="backup_restore_hint">Restoring merges: a night already recorded here is kept, and nothing is deleted. The bot token is not in the file.</string>
 </resources>

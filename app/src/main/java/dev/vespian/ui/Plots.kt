@@ -3,6 +3,7 @@ package dev.vespian.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -129,7 +130,12 @@ fun NightsChart(
         }
 
         val slot = size.width / actual.size
-        val barWidth = max(slot * 0.34f, 6f)
+        // A thin capsule, not a fat block. Fourteen of these sit side by side,
+        // so anything wider turns the chart into a wall.
+        val barWidth = (slot * 0.18f).coerceIn(3f, 7f)
+        // The dot has to read as a point on the bar, not as another bar. Small
+        // enough to sit inside the capsule, large enough to see.
+        val dotRadius = (barWidth * 0.62f).coerceIn(2.5f, 4.5f)
 
         fun py(v: Double): Float =
             size.height - (((v - lo) / span) * size.height).toFloat()
@@ -143,10 +149,12 @@ fun NightsChart(
             if (low != null && high != null) {
                 val top = py(high)
                 val bottom = py(low)
-                drawRect(
+                val height = max(bottom - top, barWidth)
+                drawRoundRect(
                     color = bandColor,
                     topLeft = Offset(cx - barWidth / 2f, top),
-                    size = Size(barWidth, max(bottom - top, 2f)),
+                    size = Size(barWidth, height),
+                    cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f),
                 )
             }
 
@@ -155,7 +163,11 @@ fun NightsChart(
                 point >= low && point <= high -> hitColor
                 else -> missColor
             }
-            drawCircle(color, radius = max(barWidth * 0.36f, 5f), center = Offset(cx, py(point)))
+            val centre = Offset(cx, py(point))
+            // A hairline ring in the grid colour keeps the dot legible where it
+            // overlaps its own band.
+            drawCircle(gridColor, radius = dotRadius + 1.5f, center = centre)
+            drawCircle(color, radius = dotRadius, center = centre)
         }
     }
 }

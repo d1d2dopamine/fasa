@@ -72,6 +72,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.vespian.db.Answer
 import dev.vespian.db.Db
@@ -230,7 +231,18 @@ private fun androidx.compose.foundation.layout.RowScope.NavItem(
         selected = current == target,
         onClick = { onSelect(target) },
         icon = { Icon(icon, contentDescription = null) },
-        label = { Text(stringResource(labelRes)) },
+        // One line, always. A label that wraps makes its own cell taller and
+        // pushes every other cell down, which is what made the bar look
+        // crooked once a fifth tab appeared.
+        label = {
+            Text(
+                text = stringResource(labelRes),
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelSmall,
+            )
+        },
     )
 }
 

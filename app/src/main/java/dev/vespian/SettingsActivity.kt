@@ -6,7 +6,9 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.layout.Column
@@ -75,6 +77,7 @@ import androidx.core.os.LocaleListCompat
 import dev.vespian.db.Db
 import dev.vespian.db.Meta
 import dev.vespian.diag.SelfTest
+import dev.vespian.export.Backup
 import dev.vespian.model.Engine
 import dev.vespian.tg.Bot
 import dev.vespian.tg.Secrets
@@ -638,6 +641,116 @@ internal fun SettingsScreen(onBack: (() -> Unit)?) {
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
+            }
+
+            Section(stringResource(R.string.settings_backup)) {
+                var busy by remember { mutableStateOf(false) }
+                var note by remember { mutableStateOf<String?>(null) }
+                var failed by remember { mutableStateOf(false) }
+
+                // The file goes wherever the system file picker points, which
+                // is the only way an app can write somewhere that survives its
+                // own uninstall.
+                val save = rememberLauncherForActivityResult(
+                    ActivityResultContracts.CreateDocument("application/json")
+                ) { uri ->
+                    if (uri != null) {
+                        busy = true
+                        note = null
+                        scope.launch {
+                            val result = runCatching {
+                                val text = Backup.build(context)
+                                withContext(Dispatchers.IO) {
+                                    val out = context.contentResolver.openOutputStream(uri)
+                                        ?: error("no stream")
+                                    out.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+                                }
+                                text.length / 1024
+                            }
+                            busy = false
+                            failed = result.isFailure
+                            note = result.fold(
+                                { context.getString(R.string.backup_saved, it) },
+                                { context.getString(R.string.backup_failed) },
+                            )
+                        }
+                    }
+                }
+
+                val restore = rememberLauncherForActivityResult(
+                    ActivityResultContracts.OpenDocument()
+                ) { uri ->
+                    if (uri != null) {
+                        busy = true
+                        note = null
+                        scope.launch {
+                            val result = runCatching {
+                                val text = withContext(Dispatchers.IO) {
+                                    val input = context.contentResolver.openInputStream(uri)
+                                        ?: error("no stream")
+                                    input.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                                }
+                                Backup.restore(context, text)
+                            }
+                            busy = false
+                            failed = result.isFailure
+                            note = result.fold(
+                                {
+                                    context.getString(
+                                        R.string.restore_done,
+                                        it.nights,
+                                        it.answers,
+                                        it.hr + it.light,
+                                    )
+                                },
+                                { context.getString(R.string.restore_failed) },
+                            )
+                        }
+                    }
+                }
+
+                Text(
+                    stringResource(R.string.backup_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Button(
+                        enabled = !busy,
+                        onClick = { save.launch(Backup.fileName()) },
+                    ) {
+                        Text(stringResource(R.string.btn_backup_save))
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    OutlinedButton(
+                        enabled = !busy,
+                        onClick = { restore.launch(arrayOf("*/*")) },
+                    ) {
+                        Text(stringResource(R.string.btn_backup_restore))
+                    }
+                }
+                if (busy) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        stringResource(R.string.backup_working),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                note?.let {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (failed) FailCoral else MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.backup_restore_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             // ---- about ----------------------------------------------------------

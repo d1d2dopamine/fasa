@@ -186,6 +186,12 @@ object Engine {
             val nowHour = hourOf(System.currentTimeMillis(), offset)
             val lightHours = lightRows.map { doubleArrayOf(hourOf(it.at, offset), it.lux.toDouble()) }
             val screenHours = screenEvents.map { hourOf(it, offset) }
+            // How long the screen was actually lit, not just how often it went
+            // dark. Recorded alongside every light sample, and until now never
+            // read by anything except the export file.
+            val screenLit = lightRows.map {
+                doubleArrayOf(hourOf(it.at, offset), it.screenMs / 60000.0)
+            }
 
             // Place the starting cloud on the first real night instead of on a
             // population average. The circadian low is taken from the nightly
@@ -284,6 +290,7 @@ object Engine {
                     previousDuration,
                     hrHours,
                     weekend = dayOfWeek == 5 || dayOfWeek == 6,
+                    screenMinutes = screenLit,
                 )
                 if (known != null) {
                     val gap = (start - f.gateMedian(wokeAt, caffeine)) * 60.0
@@ -329,6 +336,7 @@ object Engine {
                 previousDuration,
                 hrHours,
                 weekend = today == 5 || today == 6,
+                screenMinutes = screenLit,
             )
             f
         }
