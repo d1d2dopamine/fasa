@@ -196,6 +196,9 @@
     <string name="ob_open_settings">Открыть настройки</string>
     <string name="ob_grant">Выдать</string>
     <string name="ob_allow">Разрешить</string>
+    <string name="ob_back">Назад</string>
+    <string name="ob_bt">Bluetooth</string>
+    <string name="ob_bt_body">Нужен только чтобы прочитать имя, под которым сопряжён браслет. Ничего не сканируется и никуда не подключается. Без него последний экран назовёт только производителя.</string>
     <string name="ob_done">Готово</string>
     <string name="ob_welcome_title">Веспиан</string>
     <string name="ob_welcome_body">Веспиан учится понимать, когда ваши внутренние часы откроют дверь ко сну, и говорит об этом заранее. Он предсказывает. Он никогда не указывает, когда ложиться.</string>
@@ -374,4 +377,29 @@
     <string name="tgb_corr_day">День %1$d: окно %2$s - %3$s, примерно %4$d мин сна сверху.</string>
     <string name="tgb_corr_light">Приглушите свет примерно за два часа до окна. Сразу после подъёма - яркий свет.</string>
     <string name="tgb_corr_free">Без будильника и ��ез нормы часов. Окно - это когда сон приходит сам.</string>
+
+    <string name="tg_q_cans">Сколько банок энергетика было вчера?</string>
+    <string name="tg_q_alcohol">Сколько доз алкоголя было вчера?</string>
+    <string name="tg_cans_done">Энергетик: %1$d банок</string>
+    <string name="tg_alcohol_done">Алкоголь: %1$d доз</string>
+    <string name="tgb_cmd_energy">Ещё одна банка энергетика</string>
+    <string name="tgb_cmd_alcohol">Ещё одна доза алкоголя</string>
+    <string name="tgb_energy_ok">Энергетик сегодня: %1$d</string>
+    <string name="tgb_alcohol_ok">Алкоголь сегодня: %1$d</string>
+    <string name="tgb_drink_off">Этот напиток выключен. Включите его в настройках.</string>
+    <string name="tgb_st_energy">Энергетик сегодня: %1$d</string>
+    <string name="tgb_st_alcohol">Алкоголь сегодня: %1$d</string>
+
+    <string name="log_energy">Энергетик +1</string>
+    <string name="log_energy_n">Энергетик сегодня: %1$d</string>
+    <string name="log_alcohol">Алкоголь +1</string>
+    <string name="log_alcohol_n">Алкоголь сегодня: %1$d</string>
+    <string name="log_alcohol_hint">Одно нажатие - одна доза: полбанки пива, бокал вина, стопка. Миллилитры не нужны.</string>
+
+    <string name="settings_drinks">Другие напитки</string>
+    <string name="settings_drinks_hint">По умолчанию выключены. Каждый добавляет только счётчик в одно нажатие, без ввода цифр. Сила кофеина и скорость его вывода не берутся из книжки, а подбираются по вашим ночам.</string>
+    <string name="settings_drinks_energy">Энергетики</string>
+    <string name="settings_drinks_can_field">мг на банку</string>
+    <string name="settings_drinks_alcohol">Алкоголь</string>
+    <string name="settings_drinks_alcohol_hint">Считается в дозах, а не в миллилитрах. Алкоголь не приравнивается к кофеину: он сокращает время засыпания и забирает часть восстановления за ночь.</string>
 </resources>

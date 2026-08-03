@@ -94,6 +94,8 @@ object Commands {
             "bed" -> bed(context)
             "up" -> up(context)
             "coffee" -> coffee(context)
+            "energy" -> energy(context)
+            "alcohol" -> alcohol(context)
             else -> {
                 // A bare digit is the wellbeing answer typed by hand, for when
                 // the buttons on the morning question no longer respond.
@@ -121,7 +123,9 @@ object Commands {
             Instant.ofEpochMilli(wake).atZone(ZoneId.systemDefault()).toLocalDate().toString()
         else dayKey()
         val existing = db.answers().byDate(date)
-        db.answers().put(Answer(date, value, existing?.mugs, System.currentTimeMillis()))
+        val now = System.currentTimeMillis()
+        val base = existing ?: Answer(dateKey = date, mood = null, mugs = null, at = now)
+        db.answers().put(base.copy(mood = value, at = now))
         say(context, Lang.string(context, R.string.tg_mood_done, moodName(context, value)))
         runCatching { refitSoon(context) }
     }
@@ -266,6 +270,8 @@ object Commands {
                 "bed" -> "bed"
                 "up" -> "up"
                 "coffee" -> "coffee"
+                "energy", "can" -> "energy"
+                "alcohol", "drink" -> "alcohol"
                 else -> null
             }
         }
@@ -364,6 +370,15 @@ object Commands {
             list.add("bed" to c.getString(R.string.tgb_cmd_bed))
             list.add("up" to c.getString(R.string.tgb_cmd_up))
             list.add("coffee" to c.getString(R.string.tgb_cmd_coffee))
+        }
+        // Extra drinks appear in the command list only when they are switched
+        // on, in both modes: a counter is useful the moment it is drunk, not
+        // only for people using the manual buttons.
+        if (Prefs.energyOn(context)) {
+            list.add("energy" to c.getString(R.string.tgb_cmd_energy))
+        }
+        if (Prefs.alcoholOn(context)) {
+            list.add("alcohol" to c.getString(R.string.tgb_cmd_alcohol))
         }
         runCatching { Telegram.setMyCommands(token, list) }
     }
@@ -550,7 +565,8 @@ object Commands {
         val db = Db.get(context)
         val nights = runCatching { db.nights().count() }.getOrDefault(0)
         val last = db.meta().get(SyncWorker.KEY_LAST_DATA)?.toLongOrNull()
-        val mugs = db.answers().byDate(dayKey())?.mugs ?: 0
+        val today = db.answers().byDate(dayKey())
+        val mugs = today?.mugs ?: 0
         val beat = db.meta().get(LightService.K_BEAT)?.toLongOrNull() ?: 0L
 
         val sb = StringBuilder()
@@ -578,6 +594,15 @@ object Commands {
         }
         sb.append("\n")
         sb.append(Lang.string(context, R.string.tgb_st_coffee, mugs))
+        // Only what is switched on, and only what was actually answered.
+        if (Prefs.energyOn(context)) {
+            sb.append("\n")
+            sb.append(Lang.string(context, R.string.tgb_st_energy, today?.cans ?: 0))
+        }
+        if (Prefs.alcoholOn(context)) {
+            sb.append("\n")
+            sb.append(Lang.string(context, R.string.tgb_st_alcohol, today?.alcohol ?: 0))
+        }
         // The same number /corr works from, shown here without the plan, so
         // the debt is visible without having to remember another command.
         val debt = runCatching {
@@ -764,14 +789,62 @@ object Commands {
 
     // Counted the moment it is drunk, which is far better than remembering it
     // the next morning.
+    //
+    // One tap adds one. There is no field for millilitres and none for
+    // milligrams: what a mug is worth is set once in the app, and a counter
+    // that asks a question every time is a counter that gets abandoned inside
+    // a week.
     private suspend fun coffee(context: Context) {
         val db = Db.get(context)
         val date = dayKey()
-        val existing = db.answers().byDate(date)
-        val mugs = (existing?.mugs ?: 0) + 1
-        db.answers().put(Answer(date, existing?.mood, mugs, System.currentTimeMillis()))
+        val now = System.currentTimeMillis()
+        val base = db.answers().byDate(date)
+            ?: Answer(dateKey = date, mood = null, mugs = null, at = now)
+        val mugs = (base.mugs ?: 0) + 1
+        db.answers().put(base.copy(mugs = mugs, at = now))
         refitSoon(context)
         say(context, Lang.string(context, R.string.tgb_coffee_ok, mugs))
+    }
+
+    // The same counter for energy drinks. Only reachable when it is switched
+    // on in Settings, so nobody who does not drink them ever sees it.
+    //
+    // It ends up in the same caffeine total as coffee, because caffeine from a
+    // can and caffeine from a mug is the same molecule. Only the size of the
+    // dose differs, and that is a number set once.
+    private suspend fun energy(context: Context) {
+        if (!Prefs.energyOn(context)) {
+            say(context, Lang.string(context, R.string.tgb_drink_off))
+            return
+        }
+        val db = Db.get(context)
+        val date = dayKey()
+        val now = System.currentTimeMillis()
+        val base = db.answers().byDate(date)
+            ?: Answer(dateKey = date, mood = null, mugs = null, at = now)
+        val cans = (base.cans ?: 0) + 1
+        db.answers().put(base.copy(cans = cans, at = now))
+        refitSoon(context)
+        say(context, Lang.string(context, R.string.tgb_energy_ok, cans))
+    }
+
+    // Standard drinks. One tap is one drink, whatever it was: half a beer, a
+    // glass of wine, a shot. The model does not need the strength, it needs to
+    // know the difference between a sober night and a night with three.
+    private suspend fun alcohol(context: Context) {
+        if (!Prefs.alcoholOn(context)) {
+            say(context, Lang.string(context, R.string.tgb_drink_off))
+            return
+        }
+        val db = Db.get(context)
+        val date = dayKey()
+        val now = System.currentTimeMillis()
+        val base = db.answers().byDate(date)
+            ?: Answer(dateKey = date, mood = null, mugs = null, at = now)
+        val doses = (base.alcohol ?: 0) + 1
+        db.answers().put(base.copy(alcohol = doses, at = now))
+        refitSoon(context)
+        say(context, Lang.string(context, R.string.tgb_alcohol_ok, doses))
     }
 
     // Which day a moment belongs to, counted from four in the morning.

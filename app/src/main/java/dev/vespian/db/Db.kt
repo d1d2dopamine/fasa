@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ModelState::class,
         Meta::class,
     ],
-    version = 2,
+    version = 4,
     exportSchema = false,
 )
 abstract class Db : RoomDatabase() {
@@ -49,6 +49,43 @@ abstract class Db : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds the honesty columns to the light log.
+         *
+         * [LightSample.kind] separates a real reading from a covered sensor and
+         * from a window where the sensor said nothing at all. [screenMs] and
+         * [brightness] record phone use, which the light sensor cannot see.
+         *
+         * Only new columns with defaults are added, so every existing reading
+         * survives untouched and counts as a real one.
+         */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `light` ADD COLUMN `kind` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `light` ADD COLUMN `screenMs` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `light` ADD COLUMN `brightness` INTEGER NOT NULL DEFAULT -1")
+            }
+        }
+
+        /**
+         * Adds the other drinks to the daily answer.
+         *
+         * `cans` counts caffeinated drinks that are not coffee and joins the
+         * same caffeine total. `alcohol` counts standard drinks and is scored
+         * by its own parameter.
+         *
+         * Both are nullable with no default, because null means the question
+         * was never answered and zero means it was answered with none. Rows
+         * written before this migration are genuinely unanswered, so null is
+         * the truthful value for them.
+         */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `answers` ADD COLUMN `cans` INTEGER")
+                db.execSQL("ALTER TABLE `answers` ADD COLUMN `alcohol` INTEGER")
+            }
+        }
+
         @Volatile
         private var instance: Db? = null
 
@@ -58,7 +95,7 @@ abstract class Db : RoomDatabase() {
                     context.applicationContext,
                     Db::class.java,
                     "vespian.db",
-                ).addMigrations(MIGRATION_1_2)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                     .also { instance = it }
             }

@@ -459,7 +459,13 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var mugs by remember { mutableIntStateOf(0) }
+    var cans by remember { mutableIntStateOf(0) }
+    var doses by remember { mutableIntStateOf(0) }
     var mood by remember { mutableStateOf<Int?>(null) }
+    // Switched off by default. A row that is never used is a row that makes
+    // the whole card feel like a chore.
+    val energyOn = remember { Prefs.energyOn(context) }
+    val alcoholOn = remember { Prefs.alcoholOn(context) }
     var forced by remember { mutableStateOf(false) }
     var forcedKey by remember { mutableStateOf("") }
 
@@ -468,6 +474,8 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
             Db.get(context).answers().byDate(Commands.dayKey())
         }
         mugs = a?.mugs ?: 0
+        cans = a?.cans ?: 0
+        doses = a?.alcohol ?: 0
         mood = a?.mood
         val key = Forced.currentKey(context)
         forcedKey = key
@@ -506,6 +514,81 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
                 }
             }) {
                 Text(stringResource(R.string.log_undo))
+            }
+        }
+
+        // Energy drinks and alcohol, if they were switched on. Same shape as
+        // coffee: one button adds one, and nothing ever asks for a volume or a
+        // dose in milligrams. What a can is worth is a number set once.
+        if (energyOn) {
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = {
+                    val next = cans + 1
+                    cans = next
+                    scope.launch {
+                        saveAnswer(context, null, null, cans = next)
+                        onChanged()
+                    }
+                }) {
+                    Text(stringResource(R.string.log_energy))
+                }
+                Spacer(Modifier.size(12.dp))
+                Text(
+                    stringResource(R.string.log_energy_n, cans),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            if (cans > 0) {
+                TextButton(onClick = {
+                    val next = cans - 1
+                    cans = next
+                    scope.launch {
+                        saveAnswer(context, null, null, cans = next)
+                        onChanged()
+                    }
+                }) {
+                    Text(stringResource(R.string.log_undo))
+                }
+            }
+        }
+
+        if (alcoholOn) {
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = {
+                    val next = doses + 1
+                    doses = next
+                    scope.launch {
+                        saveAnswer(context, null, null, alcohol = next)
+                        onChanged()
+                    }
+                }) {
+                    Text(stringResource(R.string.log_alcohol))
+                }
+                Spacer(Modifier.size(12.dp))
+                Text(
+                    stringResource(R.string.log_alcohol_n, doses),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                stringResource(R.string.log_alcohol_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (doses > 0) {
+                TextButton(onClick = {
+                    val next = doses - 1
+                    doses = next
+                    scope.launch {
+                        saveAnswer(context, null, null, alcohol = next)
+                        onChanged()
+                    }
+                }) {
+                    Text(stringResource(R.string.log_undo))
+                }
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -616,7 +699,13 @@ private fun moodRes(value: Int): Int = when (value) {
 
 // A null argument means "leave that field as it is", so a mug never wipes the
 // morning answer and the morning answer never wipes the mugs.
-private suspend fun saveAnswer(context: Context, mugs: Int?, mood: Int?) {
+private suspend fun saveAnswer(
+    context: Context,
+    mugs: Int?,
+    mood: Int?,
+    cans: Int? = null,
+    alcohol: Int? = null,
+) {
     withContext(Dispatchers.IO) {
         val db = Db.get(context)
         val date = Commands.dayKey()
@@ -627,6 +716,8 @@ private suspend fun saveAnswer(context: Context, mugs: Int?, mood: Int?) {
                 mood = mood ?: existing?.mood,
                 mugs = mugs ?: existing?.mugs,
                 at = System.currentTimeMillis(),
+                cans = cans ?: existing?.cans,
+                alcohol = alcohol ?: existing?.alcohol,
             )
         )
         Commands.refitSoon(context)

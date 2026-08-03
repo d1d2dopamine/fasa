@@ -117,6 +117,11 @@ object HealthRepo {
             ).records.lastOrNull()?.metadata
         }.getOrNull() ?: return null
 
+        // The bond on the phone holds the full name, the one the band shows in
+        // the Bluetooth list. Health Connect only ever carries a manufacturer.
+        val bonded = runCatching { Band.name(context) }.getOrNull()?.trim().orEmpty()
+        if (bonded.isNotEmpty()) return bonded
+
         val maker = runCatching { meta.device?.manufacturer }.getOrNull()?.trim().orEmpty()
         val model = runCatching { meta.device?.model }.getOrNull()?.trim().orEmpty()
         val named = listOf(maker, model).filter { it.isNotEmpty() }.joinToString(" ")

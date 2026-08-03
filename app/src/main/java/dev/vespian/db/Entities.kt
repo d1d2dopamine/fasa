@@ -44,14 +44,53 @@ data class LightSample(
     val at: Long,
     val lux: Float,
     val screenOn: Boolean,
-)
+    // Whether this reading says anything about the light the eyes saw.
+    //
+    // A phone in a pocket reads zero at noon. Feeding that into the clock model
+    // as real darkness is a lie the model cannot detect, so untrusted rows are
+    // stored and shown but never scored.
+    val kind: Int = KIND_OK,
+    // Milliseconds the screen was on during the window this row stands for.
+    // Free to collect and the honest measure of phone use.
+    val screenMs: Long = 0L,
+    // System screen brightness setting, 0..255, or -1 when unknown.
+    val brightness: Int = -1,
+) {
+    companion object {
+        // A real reading of the surroundings.
+        const val KIND_OK = 0
 
+        // Dark with the screen off: pocket, bag, or face down on a table.
+        const val KIND_OCCLUDED = 1
+
+        // The sensor returned nothing for the whole window. Written on purpose
+        // so a hole in the log cannot be mistaken for the app being dead.
+        const val KIND_GAP = 2
+    }
+}
+
+/**
+ * What the person told the app about one day.
+ *
+ * [mugs] and [cans] are counts, not millilitres: every drink is one tap and the
+ * app converts it to milligrams of caffeine using a figure set once in
+ * settings. Both feed the same caffeine total, because caffeine is one molecule
+ * whatever carried it.
+ *
+ * [alcohol] is counted in standard drinks and is kept apart on purpose. It does
+ * not raise the sleep threshold, it lowers it and then spoils the recovery, so
+ * it is a different quantity with its own parameter in the model.
+ *
+ * Null means not answered, which is not the same as zero.
+ */
 @Entity(tableName = "answers")
 data class Answer(
     @PrimaryKey val dateKey: String,
     val mood: Int?,
     val mugs: Int?,
     val at: Long,
+    val cans: Int? = null,
+    val alcohol: Int? = null,
 )
 
 @Entity(tableName = "model")

@@ -1,6 +1,7 @@
 package dev.vespian.tg
 
 import android.content.Context
+import dev.vespian.Prefs
 import dev.vespian.R
 import dev.vespian.db.Answer
 import dev.vespian.db.Db
@@ -189,7 +190,12 @@ object Bot {
         return true
     }
 
-    // callback_data is "m:<date>:<value>" for mood and "c:<date>:<value>" for mugs.
+    // callback_data is "m:<date>:<value>" for mood, "c:<date>:<value>" for
+    // mugs of coffee, "e:<date>:<value>" for cans and "a:<date>:<value>" for
+    // standard drinks. Every one of them is a count reached by tapping a
+    // number. Nothing here ever asks for millilitres or milligrams: what a mug
+    // and a can are worth is set once in the app settings, and a question that
+    // has to be worked out is a question that stops being answered.
     private suspend fun handleCallback(
         context: Context,
         token: String,
@@ -266,9 +272,14 @@ object Bot {
 
         val db = Db.get(context)
         val existing = db.answers().byDate(date)
+        val now = System.currentTimeMillis()
+        val base = existing
+            ?: Answer(dateKey = date, mood = null, mugs = null, at = now)
         val updated = when (kind) {
-            "m" -> Answer(date, value, existing?.mugs, System.currentTimeMillis())
-            "c" -> Answer(date, existing?.mood, value, System.currentTimeMillis())
+            "m" -> base.copy(mood = value, at = now)
+            "c" -> base.copy(mugs = value, at = now)
+            "e" -> base.copy(cans = value, at = now)
+            "a" -> base.copy(alcohol = value, at = now)
             else -> null
         }
         if (updated == null) return
@@ -277,18 +288,23 @@ object Bot {
         // Collapse the answered message so the chat stays a clean log.
         val messageId = cb.optJSONObject("message")?.optInt("message_id")
         if (messageId != null && messageId != 0) {
-            val label = if (kind == "m")
-                Lang.string(context, R.string.tg_mood_done, moodLabel(context, value))
-            else
-                Lang.string(context, R.string.tg_mugs_done, value)
+            val label = when (kind) {
+                "m" -> Lang.string(context, R.string.tg_mood_done, moodLabel(context, value))
+                "e" -> Lang.string(context, R.string.tg_cans_done, value)
+                "a" -> Lang.string(context, R.string.tg_alcohol_done, value)
+                else -> Lang.string(context, R.string.tg_mugs_done, value)
+            }
             Telegram.editText(token, chat, messageId, label)
         }
 
-        // Wellbeing first, coffee second, one question on screen at a time.
-        if (kind == "m" && updated.mugs == null) {
-            enqueue(context, Lang.string(context, R.string.tg_q_mugs), mugsKeyboard(context, date))
+        // One question on screen at a time, in a fixed order: wellbeing,
+        // coffee, then whichever extra drinks are switched on. Everything past
+        // coffee is off by default, so by default this is still two taps.
+        val next = nextQuestion(context, updated)
+        if (next != null) {
+            enqueue(context, next.first, next.second)
             markAsked(context)
-        } else if (updated.mood != null && updated.mugs != null) {
+        } else {
             clearAsked(context)
         }
 
@@ -313,13 +329,12 @@ object Bot {
         if (db.meta().get(K_MORNING) == date) return
 
         val existing = db.answers().byDate(date)
-        if (existing?.mood != null && existing.mugs != null) return
+        val question = nextQuestion(
+            context,
+            existing ?: Answer(dateKey = date, mood = null, mugs = null, at = now),
+        ) ?: return
 
-        if (existing?.mood == null) {
-            enqueue(context, Lang.string(context, R.string.tg_q_mood), moodKeyboard(context, date))
-        } else {
-            enqueue(context, Lang.string(context, R.string.tg_q_mugs), mugsKeyboard(context, date))
-        }
+        enqueue(context, question.first, question.second)
         db.meta().put(Meta(K_MORNING, date))
         markAsked(context)
     }
@@ -399,4 +414,37 @@ object Bot {
         Telegram.row("3" to "c:$date:3", "4" to "c:$date:4", "5+" to "c:$date:5"),
         forcedRow(context, date),
     )
+
+    private fun cansKeyboard(context: Context, date: String): JSONArray = Telegram.keyboard(
+        Telegram.row("0" to "e:$date:0", "1" to "e:$date:1", "2" to "e:$date:2"),
+        Telegram.row("3" to "e:$date:3", "4" to "e:$date:4", "5+" to "e:$date:5"),
+        forcedRow(context, date),
+    )
+
+    private fun alcoholKeyboard(context: Context, date: String): JSONArray = Telegram.keyboard(
+        Telegram.row("0" to "a:$date:0", "1" to "a:$date:1", "2" to "a:$date:2"),
+        Telegram.row("3" to "a:$date:3", "4" to "a:$date:4", "5+" to "a:$date:5"),
+        forcedRow(context, date),
+    )
+
+    /**
+     * The next thing worth asking about this day, or null when the day is
+     * fully answered.
+     *
+     * A day counts as answered when every question that is switched on has a
+     * value. Zero is a value: a day with no coffee at all is exactly the kind
+     * of day the model needs in order to tell a strong reaction apart from a
+     * slow one, so "none" is recorded rather than left blank.
+     */
+    private fun nextQuestion(context: Context, answer: Answer): Pair<String, JSONArray>? = when {
+        answer.mood == null ->
+            Lang.string(context, R.string.tg_q_mood) to moodKeyboard(context, answer.dateKey)
+        answer.mugs == null ->
+            Lang.string(context, R.string.tg_q_mugs) to mugsKeyboard(context, answer.dateKey)
+        Prefs.energyOn(context) && answer.cans == null ->
+            Lang.string(context, R.string.tg_q_cans) to cansKeyboard(context, answer.dateKey)
+        Prefs.alcoholOn(context) && answer.alcohol == null ->
+            Lang.string(context, R.string.tg_q_alcohol) to alcoholKeyboard(context, answer.dateKey)
+        else -> null
+    }
 }

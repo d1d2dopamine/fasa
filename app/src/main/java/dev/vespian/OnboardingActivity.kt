@@ -28,7 +28,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.BatteryFull
+import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.Notifications
@@ -48,6 +50,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,6 +63,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.os.LocaleListCompat
 import androidx.health.connect.client.PermissionController
+import dev.vespian.health.Band
 import dev.vespian.health.HealthRepo
 import dev.vespian.tg.Lang
 import dev.vespian.ui.VespianTheme
@@ -119,8 +123,10 @@ private fun Onboarding(
     onDone: () -> Unit,
 ) {
     val context = LocalContext.current
-    var step by remember { mutableStateOf(STEP_WELCOME) }
-    var manual by remember { mutableStateOf(false) }
+    // Saveable, not plain remember: switching the language recreates the
+    // activity, and losing the place in the flow because of that was a bug.
+    var step by rememberSaveable { mutableStateOf(STEP_WELCOME) }
+    var manual by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -128,6 +134,9 @@ private fun Onboarding(
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
     ) {
+        if (step != STEP_WELCOME) {
+            BackBar(onBack = { step -= 1 })
+        }
         when (step) {
             STEP_WELCOME -> Welcome(
                 onSwitchLanguage = onSwitchLanguage,
@@ -160,6 +169,22 @@ private fun Onboarding(
     }
 }
 
+/** Present on every screen except the first one. */
+@Composable
+private fun BackBar(onBack: () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        TextButton(onClick = onBack) {
+            Icon(
+                Icons.Filled.ArrowBack,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.size(6.dp))
+            Text(stringResource(R.string.ob_back))
+        }
+    }
+}
+
 // ---------------------------------------------------------------- screen one
 
 @Composable
@@ -170,7 +195,7 @@ private fun Welcome(
     LanguageBar(onSwitchLanguage)
     Spacer(Modifier.height(8.dp))
     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        Duck(Modifier.size(180.dp))
+        Duck(R.raw.duck_welcome, Modifier.size(200.dp))
     }
     Spacer(Modifier.height(8.dp))
     Text(
@@ -201,14 +226,14 @@ private fun Welcome(
  * the file the view simply stays empty and the rest of the screen still works.
  */
 @Composable
-private fun Duck(modifier: Modifier = Modifier) {
+private fun Duck(res: Int, modifier: Modifier = Modifier) {
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
             ImageView(ctx).apply {
                 val drawable = runCatching {
                     ImageDecoder.decodeDrawable(
-                        ImageDecoder.createSource(ctx.resources, R.raw.duck)
+                        ImageDecoder.createSource(ctx.resources, res)
                     )
                 }.getOrNull()
                 setImageDrawable(drawable)
@@ -320,6 +345,7 @@ private fun Permissions(manual: Boolean, onNext: () -> Unit) {
         mutableStateOf(NotificationManagerCompat.from(context).areNotificationsEnabled())
     }
     var batteryFree by remember { mutableStateOf(batteryExempt(context)) }
+    var btGranted by remember { mutableStateOf(Band.allowed(context)) }
 
     val healthLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract()
@@ -331,6 +357,12 @@ private fun Permissions(manual: Boolean, onNext: () -> Unit) {
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         notifGranted = granted
+    }
+
+    val btLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        btGranted = granted
     }
 
     // Neither the battery dialog nor the store reports anything back, so the
@@ -402,6 +434,25 @@ private fun Permissions(manual: Boolean, onNext: () -> Unit) {
             }
         },
     )
+
+    // Only used to read the name the band was paired under. Nothing is scanned
+    // and nothing is connected to, so refusing this costs one line of text.
+    if (!manual) {
+        Step(
+            icon = Icons.Filled.Bluetooth,
+            title = stringResource(R.string.ob_bt),
+            body = stringResource(R.string.ob_bt_body),
+            done = btGranted,
+            action = stringResource(R.string.ob_allow),
+            onAction = {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    btLauncher.launch(Band.permission())
+                } else {
+                    btGranted = true
+                }
+            },
+        )
+    }
 
     // The chat runs inside the foreground service in both modes, so the battery
     // exemption is not a hands free luxury. Without it the bot answers late in
@@ -518,7 +569,7 @@ private fun SourceCheck(manual: Boolean, onDone: () -> Unit) {
 
     Spacer(Modifier.height(24.dp))
     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        Duck(Modifier.size(140.dp))
+        Duck(R.raw.duck_done, Modifier.size(160.dp))
     }
     Spacer(Modifier.height(16.dp))
 

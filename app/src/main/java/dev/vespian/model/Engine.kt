@@ -70,7 +70,9 @@ object Engine {
     //   measured onset
     // 6 morning wellbeing read as evidence about the pressure left at wake up
     // 7 behavioural layer weighs how much each night says about the body clock
-    const val MODEL_VERSION = 7
+    // 8 caffeine strength and clearance are personal parameters instead of
+    //   population constants, and alcohol is scored on its own
+    const val MODEL_VERSION = 8
     const val KEY_MODEL_VERSION = "model_version"
 
     // ---- caches ----------------------------------------------------------
@@ -116,14 +118,26 @@ object Engine {
         val nights = withContext(Dispatchers.IO) { db.nights().all() }
         // One query instead of one per night.
         val answers = withContext(Dispatchers.IO) { db.answers().last(10_000) }
-        val mugsByDate = answers.associate { it.dateKey to (it.mugs ?: 0) }
+        // Read once: what a mug and a can are worth is set in Settings.
+        val mgPerMugOnce = Prefs.mgPerMug(context).toDouble()
+        val mgPerCanOnce = Prefs.mgPerCan(context).toDouble()
+
+        // Every caffeinated drink collapses into one number of milligrams,
+        // because that is the only thing the body reacts to. How strongly it
+        // reacts is no longer assumed here: it is a parameter each hypothesis
+        // carries and the filter fits.
+        val caffeineByDate = answers.associate {
+            it.dateKey to ((it.mugs ?: 0) * mgPerMugOnce + (it.cans ?: 0) * mgPerCanOnce)
+        }
+
+        // Alcohol stays a separate count. It works on a different mechanism
+        // and mixing it into milligrams of caffeine would be a lie.
+        val alcoholByDate = answers.associate { it.dateKey to (it.alcohol ?: 0).toDouble() }
 
         // The morning wellbeing answer, kept apart from the mugs because it is
         // optional and often missing. Where it exists it is evidence about how
         // much pressure the night failed to discharge.
         val moodByDate = answers.mapNotNull { a -> a.mood?.let { a.dateKey to it } }.toMap()
-        // Read once: the user can change what a mug means in Settings.
-        val mgPerMug = Prefs.mgPerMug(context).toDouble()
 
         // Mornings that were ended by an alarm or by another person. On those
         // nights the body did not decide when to stop, so the length of the
@@ -215,7 +229,8 @@ object Engine {
                 val wokeAt = known ?: (start - 16.0)
                 val sigmaScale = if (known == null) 3.0 else 1.0
 
-                val caffeine = (mugsByDate[night.dateKey] ?: 0) * mgPerMug
+                val caffeine = caffeineByDate[night.dateKey] ?: 0.0
+                val alcohol = alcoholByDate[night.dateKey] ?: 0.0
 
                 // A hand typed night has no screen event behind it and its sleep
                 // start already contains an assumed latency, so it stays a plain
@@ -283,6 +298,7 @@ object Engine {
                     forcedWake = forcedKeys.contains(night.dateKey),
                     mood = moodByDate[night.dateKey],
                     onsetScale = Behaviour.widenFor(behaviourFit, evening),
+                    alcoholDoses = alcohol,
                 )
                 previousEnd = end
                 previousDuration = end - start
@@ -394,17 +410,35 @@ object Engine {
     // ---- inputs ----------------------------------------------------------
 
     // Caffeine still circulating, based on today's answer.
-    // Mugs are assumed spread over the morning, centred at 11:00 local.
+    // Drinks are assumed spread over the morning, centred at 11:00 local.
+    //
+    // Coffee and energy drinks are added together here, in milligrams, because
+    // that is the only form the body reads. The decay to this moment uses the
+    // population half life; each hypothesis then re-decays it with its own
+    // clearance while it walks the evening forward, which is where the
+    // personal figure actually matters.
     private suspend fun caffeineNow(context: Context, offset: Double): Double {
         val db = Db.get(context)
         val today = LocalDate.now().toString()
-        val mugs = withContext(Dispatchers.IO) { db.answers().byDate(today)?.mugs } ?: return 0.0
-        if (mugs <= 0) return 0.0
+        val answer = withContext(Dispatchers.IO) { db.answers().byDate(today) } ?: return 0.0
+        val mg = (answer.mugs ?: 0) * Prefs.mgPerMug(context).toDouble() +
+            (answer.cans ?: 0) * Prefs.mgPerCan(context).toDouble()
+        if (mg <= 0.0) return 0.0
 
         val centre = ZonedDateTime.of(LocalDate.now(), LocalTime.of(11, 0), ZoneId.systemDefault())
         val drankAt = hourOf(centre.toInstant().toEpochMilli(), offset)
         val nowHour = hourOf(System.currentTimeMillis(), offset)
-        return Physics.caffeine(mugs * Prefs.mgPerMug(context).toDouble(), nowHour - drankAt)
+        return Physics.caffeine(mg, nowHour - drankAt)
+    }
+
+    // Standard drinks logged today. Kept separate from caffeine on purpose:
+    // it shortens the wait for sleep instead of lengthening it, and it costs
+    // the night part of its recovery.
+    private suspend fun alcoholToday(context: Context): Double {
+        val db = Db.get(context)
+        val today = LocalDate.now().toString()
+        val answer = withContext(Dispatchers.IO) { db.answers().byDate(today) } ?: return 0.0
+        return (answer.alcohol ?: 0).toDouble()
     }
 
     // When did the body last wake up. Falls back to a plausible morning so the
@@ -463,12 +497,14 @@ object Engine {
         val nights = withContext(Dispatchers.IO) { db.nights().count() }
         val wokeAt = lastWakeHour(context, offset)
         val caffeine = caffeineNow(context, offset)
+        val alcohol = alcoholToday(context)
         val alarm = alarmRaw(context) ?: "-"
 
         // Quarter hour buckets. Nothing in the answer moves faster than that,
         // and it caps a recompute at four per hour instead of one per redraw.
         val bucket = floor(hourOf(System.currentTimeMillis(), offset) * 4.0).toLong()
-        val key = "$filterStamp|$nights|$alarm|$bucket|${offset}|${(caffeine / 5.0).toInt()}"
+        val key = "$filterStamp|$nights|$alarm|$bucket|${offset}|" +
+            "${(caffeine / 5.0).toInt()}|${alcohol.toInt()}"
 
         val hit = forecastCache
         if (hit != null && key == forecastKey) return hit
@@ -479,6 +515,7 @@ object Engine {
                 caffeineMg = caffeine,
                 nights = nights,
                 targetWake = null,
+                alcoholDoses = alcohol,
             )
             val target = targetWakeHour(context, offset, base.onset.median)
             if (target == null) base else base.copy(reverseAlarm = filter.reverseBand(target))

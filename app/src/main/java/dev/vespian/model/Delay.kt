@@ -53,10 +53,14 @@ object Delay {
             .takeLast(WINDOW + 1)
         if (nights.size < MIN_NIGHTS + 1) return@withContext null
 
-        val mugsByDate = withContext(Dispatchers.IO) {
-            db.answers().last(10_000).associate { it.dateKey to (it.mugs ?: 0) }
-        }
         val mgPerMug = Prefs.mgPerMug(context).toDouble()
+        val mgPerCan = Prefs.mgPerCan(context).toDouble()
+        // Coffee and energy drinks are one caffeine total, in milligrams.
+        val caffeineByDate = withContext(Dispatchers.IO) {
+            db.answers().last(10_000).associate {
+                it.dateKey to ((it.mugs ?: 0) * mgPerMug + (it.cans ?: 0) * mgPerCan)
+            }
+        }
         val offset = Engine.offsetHours()
         val zone = ZoneId.systemDefault()
         val step = (filter.particles.size / SAMPLE).coerceAtLeast(1)
@@ -79,7 +83,7 @@ object Delay {
             previousEnd = end
             if (woke == null) continue
 
-            val caffeine = (mugsByDate[night.dateKey] ?: 0) * mgPerMug
+            val caffeine = caffeineByDate[night.dateKey] ?: 0.0
 
             // Preferred: the last time the screen went dark before this night.
             // That is the decision to stop, and it is compared with the bare

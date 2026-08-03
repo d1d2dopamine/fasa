@@ -23,9 +23,63 @@ object Physics {
     const val L0 = 0.17
     const val AMP = 0.12
 
+    // ---- caffeine --------------------------------------------------------
+    //
+    // These two numbers used to be the whole story of caffeine in this model,
+    // applied identically to every person. That is wrong in a way that matters.
+    // Clearance of caffeine is governed largely by one liver enzyme whose
+    // activity varies several fold between people, so the same mug keeps one
+    // person awake for three hours and another for ten. Sensitivity at the
+    // receptor varies on top of that.
+    //
+    // So they are no longer constants of the world. They are the population
+    // means of two personal parameters carried by every hypothesis, and the
+    // filter moves them the same way it moves the period of the body clock.
+    // What stays fixed is the physics: a dose decays exponentially, and the
+    // drug raises the threshold in proportion to how much of it is left.
+    //
+    // There is exactly one gain, shared by every caffeinated drink, because
+    // caffeine from a mug and caffeine from a can is the same molecule at the
+    // same receptor. Drinks differ in the dose they deliver, and the dose is
+    // already counted in milligrams. Fitting a separate gain per drink would
+    // split the same evidence across parameters that must be equal.
     const val K_CAF = 0.0008
     const val CAF_HALF_LIFE = 5.0
     const val MG_PER_MUG = 130.0
+
+    // Bounds of the personal caffeine parameters. The gain spans roughly a
+    // threefold range either side of the mean; the half life covers the
+    // measured human range from a fast metaboliser to a slow one.
+    const val CAF_GAIN_MIN = 0.00025
+    const val CAF_GAIN_MAX = 0.0025
+    const val CAF_GAIN_SD = 0.0004
+    const val CAF_HL_MIN = 2.0
+    const val CAF_HL_MAX = 10.0
+    const val CAF_HL_SD = 1.5
+
+    // ---- alcohol ---------------------------------------------------------
+    //
+    // Alcohol is not caffeine with a minus sign, so it does not share the
+    // gain. It is sedative on the way in and disruptive on the way out: it
+    // shortens the time taken to fall asleep, then suppresses REM and
+    // fragments the second half of the night, so the same hours in bed
+    // discharge less pressure than a sober night would.
+    //
+    // One personal parameter covers both, because both come from the same
+    // dose and there is no way to tell them apart from a wrist band. It is the
+    // fraction of the night's recovery lost per standard drink.
+    const val K_ALC = 0.10
+    const val ALC_MIN = 0.0
+    const val ALC_MAX = 0.40
+    const val ALC_SD = 0.07
+
+    // A dose cannot cut the time to fall asleep by more than this, whatever
+    // the count says. Ten drinks do not produce a negative latency.
+    const val ALC_LATENCY_FLOOR = 0.35
+
+    // Doses beyond this are not scored any harder. The curve flattens and the
+    // night stops being a measurement of anything.
+    const val ALC_MAX_DOSES = 6.0
 
     // ---- shape of the circadian process ----------------------------------
     //
@@ -62,7 +116,7 @@ object Physics {
     }
 
     fun upperThreshold(hour: Double, p: Particle, caffeineMg: Double): Double =
-        H0 + AMP * circadian(hour, p.phi, p.tau) + K_CAF * caffeineMg
+        H0 + AMP * circadian(hour, p.phi, p.tau) + p.cafGain * caffeineMg
 
     fun lowerThreshold(hour: Double, p: Particle): Double =
         L0 + AMP * circadian(hour, p.phi, p.tau)
@@ -73,8 +127,16 @@ object Physics {
     fun fall(s: Double, dt: Double, tauFall: Double): Double =
         s * exp(-dt / tauFall)
 
-    fun caffeine(mg: Double, dt: Double): Double =
-        if (dt < 0.0) 0.0 else mg * 2.0.pow(-dt / CAF_HALF_LIFE)
+    fun caffeine(mg: Double, dt: Double, halfLife: Double = CAF_HALF_LIFE): Double =
+        if (dt < 0.0) 0.0 else mg * 2.0.pow(-dt / halfLife)
+
+    // How much of one night's recovery this hypothesis thinks was lost to
+    // drink. Zero doses cost nothing; the effect saturates rather than growing
+    // without limit.
+    fun alcoholLoss(p: Particle, doses: Double): Double {
+        if (doses <= 0.0) return 0.0
+        return (p.alcGain * doses.coerceAtMost(ALC_MAX_DOSES)).coerceIn(0.0, 0.8)
+    }
 
     // ---- light -----------------------------------------------------------
     //
@@ -144,6 +206,21 @@ data class Particle(
     var latency: Double,
     var lightGain: Double,
     var weight: Double,
+    /**
+     * How far one milligram of circulating caffeine lifts the threshold for
+     * this body. [Physics.K_CAF] is the population mean it starts from.
+     */
+    var cafGain: Double = Physics.K_CAF,
+    /**
+     * Hours for half of a caffeine dose to clear this body. The human range is
+     * wide enough that assuming the average is the single largest avoidable
+     * error in an evening forecast for a fast or a slow metaboliser.
+     */
+    var cafHalfLife: Double = Physics.CAF_HALF_LIFE,
+    /**
+     * Fraction of a night's recovery this body loses per standard drink.
+     */
+    var alcGain: Double = Physics.K_ALC,
     /**
      * Sleep pressure left over at the last wake up.
      *

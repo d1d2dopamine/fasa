@@ -196,6 +196,9 @@
     <string name="ob_open_settings">Open settings</string>
     <string name="ob_grant">Grant</string>
     <string name="ob_allow">Allow</string>
+    <string name="ob_back">Back</string>
+    <string name="ob_bt">Bluetooth</string>
+    <string name="ob_bt_body">Only to read the name your band was paired under. Nothing is scanned and nothing is connected to. Without it the last screen can only say the maker.</string>
     <string name="ob_done">Done</string>
     <string name="ob_welcome_title">Vespian</string>
     <string name="ob_welcome_body">Vespian learns when your body clock opens the door to sleep, and tells you before the evening starts. It predicts. It never tells you when to go to bed.</string>
@@ -374,4 +377,29 @@
     <string name="tgb_corr_day">Day %1$d: window %2$s - %3$s, about %4$d min of extra sleep.</string>
     <string name="tgb_corr_light">Dim the light about two hours before the window. Bright light right after waking up.</string>
     <string name="tgb_corr_free">No alarm, no fixed length. The window is where sleep comes on its own.</string>
+
+    <string name="tg_q_cans">How many cans of energy drink yesterday?</string>
+    <string name="tg_q_alcohol">How many drinks yesterday?</string>
+    <string name="tg_cans_done">Energy drink: %1$d cans</string>
+    <string name="tg_alcohol_done">Alcohol: %1$d drinks</string>
+    <string name="tgb_cmd_energy">One more can of energy drink</string>
+    <string name="tgb_cmd_alcohol">One more drink</string>
+    <string name="tgb_energy_ok">Energy drink today: %1$d</string>
+    <string name="tgb_alcohol_ok">Alcohol today: %1$d</string>
+    <string name="tgb_drink_off">That drink is switched off. Turn it on in Settings.</string>
+    <string name="tgb_st_energy">Energy drink today: %1$d</string>
+    <string name="tgb_st_alcohol">Alcohol today: %1$d</string>
+
+    <string name="log_energy">Energy +1</string>
+    <string name="log_energy_n">Energy drink today: %1$d</string>
+    <string name="log_alcohol">Drink +1</string>
+    <string name="log_alcohol_n">Alcohol today: %1$d</string>
+    <string name="log_alcohol_hint">One tap is one drink: half a beer, a glass of wine, a shot. No volumes needed.</string>
+
+    <string name="settings_drinks">Other drinks</string>
+    <string name="settings_drinks_hint">Off by default. Each one adds a single tap counter, never a number to type. Caffeine strength and how fast it clears are learned from your nights, not assumed.</string>
+    <string name="settings_drinks_energy">Energy drinks</string>
+    <string name="settings_drinks_can_field">mg per can</string>
+    <string name="settings_drinks_alcohol">Alcohol</string>
+    <string name="settings_drinks_alcohol_hint">Counted in drinks, not millilitres. Alcohol is not treated as caffeine: it shortens the wait for sleep and takes part of the night\'s recovery away.</string>
 </resources>

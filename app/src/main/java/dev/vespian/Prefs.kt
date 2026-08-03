@@ -25,6 +25,21 @@ object Prefs {
     const val MG_PER_MUG_MIN = 20
     const val MG_PER_MUG_MAX = 400
 
+    // Other drinks. Off by default and invisible until switched on, because an
+    // interface full of drinks nobody has is an interface nobody keeps using.
+    //
+    // There is no third caffeinated switch on purpose. Every caffeinated drink
+    // ends up as milligrams in the same total, so more buttons would add
+    // tapping without adding anything the model can learn from.
+    private const val KEY_DRINK_ENERGY = "drink_energy"
+    private const val KEY_DRINK_ALCOHOL = "drink_alcohol"
+
+    // Caffeine in one can of energy drink. A half litre can sits near this.
+    private const val KEY_MG_PER_CAN = "mg_per_can"
+    const val MG_PER_CAN_DEFAULT = 160
+    const val MG_PER_CAN_MIN = 20
+    const val MG_PER_CAN_MAX = 400
+
     private fun prefs(context: Context) =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
@@ -55,5 +70,27 @@ object Prefs {
     fun setMgPerMug(context: Context, value: Int) {
         val clamped = value.coerceIn(MG_PER_MUG_MIN, MG_PER_MUG_MAX)
         prefs(context).edit().putInt(KEY_MG_PER_MUG, clamped).apply()
+    }
+
+    fun energyOn(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_DRINK_ENERGY, false)
+
+    fun setEnergyOn(context: Context, value: Boolean) {
+        prefs(context).edit().putBoolean(KEY_DRINK_ENERGY, value).apply()
+    }
+
+    fun alcoholOn(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_DRINK_ALCOHOL, false)
+
+    fun setAlcoholOn(context: Context, value: Boolean) {
+        prefs(context).edit().putBoolean(KEY_DRINK_ALCOHOL, value).apply()
+    }
+
+    fun mgPerCan(context: Context): Int =
+        prefs(context).getInt(KEY_MG_PER_CAN, MG_PER_CAN_DEFAULT)
+
+    fun setMgPerCan(context: Context, value: Int) {
+        val clamped = value.coerceIn(MG_PER_CAN_MIN, MG_PER_CAN_MAX)
+        prefs(context).edit().putInt(KEY_MG_PER_CAN, clamped).apply()
     }
 }

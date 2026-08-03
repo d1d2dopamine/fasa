@@ -92,6 +92,12 @@ class Filter(val particles: MutableList<Particle>) {
                     latency = gauss(rnd, 25.0, 15.0).coerceIn(2.0, 120.0),
                     lightGain = gauss(rnd, 0.5, 0.3).coerceIn(0.0, 1.5),
                     weight = 1.0 / COUNT,
+                    cafGain = gauss(rnd, Physics.K_CAF, Physics.CAF_GAIN_SD)
+                        .coerceIn(Physics.CAF_GAIN_MIN, Physics.CAF_GAIN_MAX),
+                    cafHalfLife = gauss(rnd, Physics.CAF_HALF_LIFE, Physics.CAF_HL_SD)
+                        .coerceIn(Physics.CAF_HL_MIN, Physics.CAF_HL_MAX),
+                    alcGain = gauss(rnd, Physics.K_ALC, Physics.ALC_SD)
+                        .coerceIn(Physics.ALC_MIN, Physics.ALC_MAX),
                 )
             }
             return Filter(list)
@@ -125,6 +131,12 @@ class Filter(val particles: MutableList<Particle>) {
                     // hold seven fields. Starting them from the floor is what
                     // the old maths assumed anyway.
                     sWake = if (p.length() > 7) p.getDouble(7) else Physics.L0,
+                    // Clouds saved before drinks became personal hold eight
+                    // fields and fall back to the population means, which is
+                    // exactly the fixed behaviour they were saved with.
+                    cafGain = if (p.length() > 8) p.getDouble(8) else Physics.K_CAF,
+                    cafHalfLife = if (p.length() > 9) p.getDouble(9) else Physics.CAF_HALF_LIFE,
+                    alcGain = if (p.length() > 10) p.getDouble(10) else Physics.K_ALC,
                 )
             }
             if (list.isEmpty()) null else Filter(list)
@@ -138,6 +150,7 @@ class Filter(val particles: MutableList<Particle>) {
             one.put(p.tau); one.put(p.phi); one.put(p.tauRise); one.put(p.tauFall)
             one.put(p.latency); one.put(p.lightGain); one.put(p.weight)
             one.put(p.sWake)
+            one.put(p.cafGain); one.put(p.cafHalfLife); one.put(p.alcGain)
             arr.put(one)
         }
         return arr.toString()
@@ -176,6 +189,7 @@ class Filter(val particles: MutableList<Particle>) {
         forcedWake: Boolean = false,
         mood: Int? = null,
         onsetScale: Double = 1.0,
+        alcoholDoses: Double = 0.0,
     ) {
         val duration = sleepEndHour - sleepStartHour
         if (duration <= 0.0 || duration > 16.0) return
@@ -215,7 +229,13 @@ class Filter(val particles: MutableList<Particle>) {
         for (p in particles) {
             // Pressure starts where the last night left it, not at the floor.
             val predictedGate = gateFrom(p, wokeAtHour, p.sWake, caffeineMg)
-            val predictedOnset = predictedGate + p.latency / 60.0
+            // Drink shortens the wait for sleep. How much is personal, so a
+            // night that began unusually fast after a few doses is evidence
+            // about this body's sensitivity, not noise to be shrugged off.
+            val alcLoss = Physics.alcoholLoss(p, alcoholDoses)
+            val latencyMin =
+                p.latency * (1.0 - alcLoss).coerceAtLeast(Physics.ALC_LATENCY_FLOOR)
+            val predictedOnset = predictedGate + latencyMin / 60.0
             // Walked down from the onset the band recorded. Building this on
             // the predicted onset stacked one guess on another and, on a night
             // with no measured previous wake up, discarded the measured
@@ -245,7 +265,7 @@ class Filter(val particles: MutableList<Particle>) {
             if (!forcedWake || eWake < 0.0) e2 += eWake * eWake
 
             if (measuredLatency != null) {
-                val e = (p.latency - measuredLatency) / sLat
+                val e = (latencyMin - measuredLatency) / sLat
                 e2 += e * e
             }
 
@@ -257,7 +277,19 @@ class Filter(val particles: MutableList<Particle>) {
             // Whatever this night failed to discharge is tomorrow's starting
             // point. This is what keeps a short night from being read as a
             // shifted body clock.
-            val sAfter = pressureAfter(p, sleepStartHour, sleepEndHour)
+            // The other half of what drink does. The hours in bed are real,
+            // but part of their recovery never happens: REM is suppressed and
+            // the second half of the night fragments. So the same measured
+            // night discharges less, and the morning answer is scored against
+            // that reduced recovery rather than against the clean one.
+            val sStart = Physics.H0 +
+                Physics.AMP * Physics.circadian(sleepStartHour, p.phi, p.tau)
+            val sClean = pressureAfter(p, sleepStartHour, sleepEndHour)
+            val sAfter = if (alcLoss > 0.0) {
+                (sStart - (1.0 - alcLoss) * (sStart - sClean)).coerceAtLeast(Physics.L0)
+            } else {
+                sClean
+            }
 
             // The morning answer is a reading of exactly that leftover
             // pressure. A hypothesis claiming the night discharged in full has
@@ -330,6 +362,12 @@ class Filter(val particles: MutableList<Particle>) {
                     latency = (src.latency + gauss(rnd, 0.0, 2.0)).coerceIn(2.0, 120.0),
                     lightGain = (src.lightGain + gauss(rnd, 0.0, 0.05)).coerceIn(0.0, 1.5),
                     weight = step,
+                    cafGain = (src.cafGain + gauss(rnd, 0.0, Physics.CAF_GAIN_SD * 0.12))
+                        .coerceIn(Physics.CAF_GAIN_MIN, Physics.CAF_GAIN_MAX),
+                    cafHalfLife = (src.cafHalfLife + gauss(rnd, 0.0, Physics.CAF_HL_SD * 0.12))
+                        .coerceIn(Physics.CAF_HL_MIN, Physics.CAF_HL_MAX),
+                    alcGain = (src.alcGain + gauss(rnd, 0.0, Physics.ALC_SD * 0.12))
+                        .coerceIn(Physics.ALC_MIN, Physics.ALC_MAX),
                 )
             )
             u += step
@@ -383,7 +421,7 @@ class Filter(val particles: MutableList<Particle>) {
         var t = wokeAtHour
         val limit = wokeAtHour + 30.0
         while (t < limit) {
-            val caf = Physics.caffeine(caffeineMg, t - wokeAtHour)
+            val caf = Physics.caffeine(caffeineMg, t - wokeAtHour, p.cafHalfLife)
             if (s >= Physics.upperThreshold(t, p, caf)) return t
             s = Physics.rise(s, STEP_H, p.tauRise)
             t += STEP_H
@@ -504,6 +542,7 @@ class Filter(val particles: MutableList<Particle>) {
         caffeineMg: Double,
         nights: Int,
         targetWake: Double?,
+        alcoholDoses: Double = 0.0,
     ): Forecast {
         val n = particles.size
         val gates = DoubleArray(n)
@@ -514,7 +553,9 @@ class Filter(val particles: MutableList<Particle>) {
         for (i in 0 until n) {
             val p = particles[i]
             val g = gateFrom(p, wokeAtHour, p.sWake, caffeineMg)
-            val o = g + p.latency / 60.0
+            val alcLoss = Physics.alcoholLoss(p, alcoholDoses)
+            val o = g + p.latency *
+                (1.0 - alcLoss).coerceAtLeast(Physics.ALC_LATENCY_FLOOR) / 60.0
             gates[i] = g
             onsets[i] = o
             wakes[i] = wakeFrom(p, o)

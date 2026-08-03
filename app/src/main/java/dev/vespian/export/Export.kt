@@ -26,7 +26,7 @@ import kotlin.math.sqrt
 // A bare table of numbers invites confident wrong conclusions.
 object Export {
 
-    const val FORMAT_VERSION = 2
+    const val FORMAT_VERSION = 3
 
     // Thirty days of five minute bins is about eight thousand rows. Longer than
     // that and the file stops being something a person can open.
@@ -64,6 +64,8 @@ object Export {
                 answers[n.dateKey]?.mood,
                 answers[n.dateKey]?.mugs,
                 forced.contains(n.dateKey),
+                answers[n.dateKey]?.cans,
+                answers[n.dateKey]?.alcohol,
             )
         )
         root.put("nights", arr)
@@ -74,8 +76,11 @@ object Export {
             o.put("date", a.dateKey)
             o.put("morning_wellbeing_1_to_5", a.mood ?: JSONObject.NULL)
             o.put("coffee_mugs_previous_day", a.mugs ?: JSONObject.NULL)
+            o.put("energy_drink_cans_previous_day", a.cans ?: JSONObject.NULL)
+            o.put("alcohol_standard_drinks_previous_day", a.alcohol ?: JSONObject.NULL)
             o.put("mug_volume_ml", 430)
-            o.put("caffeine_mg_per_mug", Physics.MG_PER_MUG)
+            o.put("caffeine_mg_per_mug", Prefs.mgPerMug(context))
+            o.put("caffeine_mg_per_can", Prefs.mgPerCan(context))
             o.put("answered_at_utc", Instant.ofEpochMilli(a.at).toString())
             ans.put(o)
         }
@@ -136,6 +141,8 @@ object Export {
         mood: Int?,
         mugs: Int?,
         forcedWake: Boolean,
+        cans: Int?,
+        alcohol: Int?,
     ): JSONObject {
         val o = JSONObject()
         o.put("date", n.dateKey)
@@ -164,6 +171,8 @@ object Export {
         o.put("spo2_mean_percent", n.spo2Mean ?: JSONObject.NULL)
         o.put("morning_wellbeing_1_to_5", mood ?: JSONObject.NULL)
         o.put("coffee_mugs_previous_day", mugs ?: JSONObject.NULL)
+        o.put("energy_drink_cans_previous_day", cans ?: JSONObject.NULL)
+        o.put("alcohol_standard_drinks_previous_day", alcohol ?: JSONObject.NULL)
         o.put("wake_was_forced", forcedWake)
         o.put("source", n.source)
         return o
@@ -210,16 +219,48 @@ object Export {
         samples.groupBy {
             Instant.ofEpochMilli(it.at).atZone(zone).toLocalDate().toString()
         }.toSortedMap().forEach { (date, list) ->
-            val lux = list.map { it.lux }.sorted()
+            // A reading taken with the phone in a pocket is not a reading of
+            // the room, and a window where the sensor said nothing is not a
+            // dark room either. Counting either of them as measured light is
+            // how the log ends up claiming a day that never happened, so the
+            // statistics below are computed from trusted readings only and the
+            // rejected ones are reported separately rather than hidden.
+            val trusted = list.filter { it.kind == LightSample.KIND_OK }
             val o = JSONObject()
             o.put("date", date)
             o.put("samples", list.size)
+            o.put("samples_trusted", trusted.size)
+            o.put("samples_occluded", list.count { it.kind == LightSample.KIND_OCCLUDED })
+            o.put("samples_missing", list.count { it.kind == LightSample.KIND_GAP })
+
+            // Phone use, which the light sensor cannot see. Screen light at the
+            // eye is far too weak to move the body clock, so this is behaviour,
+            // not light exposure, and it is reported as its own quantity.
+            o.put("screen_minutes", (list.sumOf { it.screenMs } / 60000L).toInt())
+            val brightness = list.map { it.brightness }.filter { it >= 0 }.sorted()
+            o.put(
+                "screen_brightness_median",
+                if (brightness.isEmpty()) JSONObject.NULL else brightness[brightness.size / 2]
+            )
+
+            if (trusted.isEmpty()) {
+                out.put(o)
+                return@forEach
+            }
+
+            val lux = trusted.map { it.lux }.sorted()
             o.put("peak_lux", lux.last().toInt())
             o.put("median_lux", lux[lux.size / 2].toInt())
-            // Each sample stands for one five minute window.
-            o.put("minutes_above_1000_lux", list.count { it.lux >= 1000f } * 5)
-            o.put("minutes_above_100_lux", list.count { it.lux >= 100f } * 5)
-            val bright = list.filter { it.lux >= 1000f }.minByOrNull { it.at }
+            // Each sample stands for one five minute window. Three thresholds
+            // instead of one: a thousand lux is outdoor daylight and indoors
+            // it is simply never reached, so on its own it reports zero every
+            // day and says nothing about the light this person actually lived
+            // in. A hundred is ordinary room light, five hundred is a bright
+            // room or a window seat.
+            o.put("minutes_above_1000_lux", trusted.count { it.lux >= 1000f } * 5)
+            o.put("minutes_above_500_lux", trusted.count { it.lux >= 500f } * 5)
+            o.put("minutes_above_100_lux", trusted.count { it.lux >= 100f } * 5)
+            val bright = trusted.filter { it.lux >= 500f }.minByOrNull { it.at }
             o.put(
                 "first_bright_light_local",
                 bright?.let { local(it.at, zone) } ?: JSONObject.NULL

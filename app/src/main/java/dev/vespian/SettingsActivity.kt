@@ -45,6 +45,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -134,6 +135,14 @@ private fun SettingsScreen(onBack: () -> Unit) {
     var alarmNote by remember { mutableStateOf<Int?>(null) }
     var mg by remember { mutableStateOf(Prefs.mgPerMug(context).toString()) }
     var mgNote by remember { mutableStateOf<Int?>(null) }
+
+    // Optional drinks. Everything here is off until it is switched on, and
+    // switching one on adds exactly one tap counter, never a number to type in
+    // the evening.
+    var energyOn by remember { mutableStateOf(Prefs.energyOn(context)) }
+    var alcoholOn by remember { mutableStateOf(Prefs.alcoholOn(context)) }
+    var mgCan by remember { mutableStateOf(Prefs.mgPerCan(context).toString()) }
+    var mgCanNote by remember { mutableStateOf<Int?>(null) }
 
     // About block. Nulls mean "not read yet".
     var svcSince by remember { mutableStateOf<Long?>(null) }
@@ -336,6 +345,92 @@ private fun SettingsScreen(onBack: () -> Unit) {
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
+            }
+
+            Section(stringResource(R.string.settings_drinks)) {
+                Text(
+                    stringResource(R.string.settings_drinks_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        stringResource(R.string.settings_drinks_energy),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = energyOn,
+                        onCheckedChange = {
+                            energyOn = it
+                            Prefs.setEnergyOn(context, it)
+                            Engine.invalidate()
+                        },
+                    )
+                }
+                if (energyOn) {
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = mgCan,
+                        onValueChange = {
+                            mgCan = it.filter { c -> c.isDigit() }.take(3)
+                            mgCanNote = null
+                        },
+                        modifier = Modifier.width(160.dp),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        label = { Text(stringResource(R.string.settings_drinks_can_field)) },
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Button(onClick = {
+                        val value = mgCan.toIntOrNull()
+                        if (value == null ||
+                            value < Prefs.MG_PER_CAN_MIN ||
+                            value > Prefs.MG_PER_CAN_MAX
+                        ) {
+                            mgCanNote = R.string.settings_coffee_bad
+                            return@Button
+                        }
+                        Prefs.setMgPerCan(context, value)
+                        Engine.invalidate()
+                        mgCanNote = R.string.saved
+                    }) { Text(stringResource(R.string.save)) }
+                    mgCanNote?.let {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            stringResource(it),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        stringResource(R.string.settings_drinks_alcohol),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = alcoholOn,
+                        onCheckedChange = {
+                            alcoholOn = it
+                            Prefs.setAlcoholOn(context, it)
+                            Engine.invalidate()
+                        },
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.settings_drinks_alcohol_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             // ---- telegram -----------------------------------------------------
