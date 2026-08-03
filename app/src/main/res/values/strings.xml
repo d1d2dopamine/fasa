@@ -243,6 +243,7 @@
     <string name="tgb_cmd_bed">Going to bed now</string>
     <string name="tgb_cmd_up">Got up now</string>
     <string name="tgb_cmd_coffee">One more mug of coffee</string>
+    <string name="tgb_cmd_nocoffee">Erase today\'s coffee</string>
     <string name="tgb_no_forecast">No forecast yet. It appears once the first data arrives.</string>
     <string name="tgb_b_forecast">Forecast</string>
     <string name="tgb_b_status">Status</string>
@@ -261,6 +262,8 @@
     <string name="tgb_up_none">No bedtime marked, or it was too recent.</string>
     <string name="tgb_up_band">The band already recorded this night, keeping its numbers.</string>
     <string name="tgb_coffee_ok">Coffee today: %1$d</string>
+    <string name="tgb_nocoffee_ok">Coffee erased. Today counts as unanswered and the model was refitted without it.</string>
+    <string name="tgb_nocoffee_none">Nothing to erase: no coffee recorded today.</string>
     <string name="settings_mode">Mode</string>
     <string name="settings_mode_hint">Hands free reads everything by itself. Manual adds chat buttons for going to bed, getting up and coffee, for use without a band.</string>
     <string name="f_debt_title">Sleep debt</string>
@@ -334,6 +337,7 @@
     <string name="log_coffee">Coffee +1</string>
     <string name="log_coffee_n">Coffee today: %1$d</string>
     <string name="log_undo">Undo</string>
+    <string name="log_reset">Erase</string>
     <string name="log_mood">How do you feel?</string>
     <string name="log_mood_set">Recorded: %1$s</string>
     <string name="log_mood_none">Not recorded today</string>

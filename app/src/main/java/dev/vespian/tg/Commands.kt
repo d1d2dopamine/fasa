@@ -94,6 +94,7 @@ object Commands {
             "bed" -> bed(context)
             "up" -> up(context)
             "coffee" -> coffee(context)
+            "nocoffee" -> noCoffee(context)
             "energy" -> energy(context)
             "alcohol" -> alcohol(context)
             else -> {
@@ -270,6 +271,7 @@ object Commands {
                 "bed" -> "bed"
                 "up" -> "up"
                 "coffee" -> "coffee"
+                "nocoffee", "coffee0", "uncoffee" -> "nocoffee"
                 "energy", "can" -> "energy"
                 "alcohol", "drink" -> "alcohol"
                 else -> null
@@ -371,6 +373,9 @@ object Commands {
             list.add("up" to c.getString(R.string.tgb_cmd_up))
             list.add("coffee" to c.getString(R.string.tgb_cmd_coffee))
         }
+        // Erasing today's coffee is always available. A wrong count is worse
+        // than no count, because the model treats it as a real observation.
+        list.add("nocoffee" to c.getString(R.string.tgb_cmd_nocoffee))
         // Extra drinks appear in the command list only when they are switched
         // on, in both modes: a counter is useful the moment it is drunk, not
         // only for people using the manual buttons.
@@ -804,6 +809,24 @@ object Commands {
         db.answers().put(base.copy(mugs = mugs, at = now))
         refitSoon(context)
         say(context, Lang.string(context, R.string.tgb_coffee_ok, mugs))
+    }
+
+    // Erase today's coffee completely. Not a minus one: this puts the day back
+    // to unanswered, drops the observation and refits, so a mug that was never
+    // drunk cannot keep bending the forecast.
+    private suspend fun noCoffee(context: Context) {
+        val db = Db.get(context)
+        val date = dayKey()
+        val now = System.currentTimeMillis()
+        val existing = db.answers().byDate(date)
+        if (existing?.mugs == null) {
+            say(context, Lang.string(context, R.string.tgb_nocoffee_none))
+            return
+        }
+        db.answers().put(existing.copy(mugs = null, at = now))
+        Engine.invalidate()
+        refitSoon(context, force = true)
+        say(context, Lang.string(context, R.string.tgb_nocoffee_ok))
     }
 
     // The same counter for energy drinks. Only reachable when it is switched

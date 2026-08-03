@@ -243,6 +243,7 @@
     <string name="tgb_cmd_bed">Ложусь сейчас</string>
     <string name="tgb_cmd_up">Встал сейчас</string>
     <string name="tgb_cmd_coffee">Еще одна кружка кофе</string>
+    <string name="tgb_cmd_nocoffee">Стереть кофе за сегодня</string>
     <string name="tgb_no_forecast">Прогноза пока нет. Он появится, когда придут первые данные.</string>
     <string name="tgb_b_forecast">Прогноз</string>
     <string name="tgb_b_status">Статус</string>
@@ -261,6 +262,8 @@
     <string name="tgb_up_none">Отметки \"ложусь\" нет или она слишком свежая.</string>
     <string name="tgb_up_band">Браслет уже записал эту ночь, оставляю его данные.</string>
     <string name="tgb_coffee_ok">Кофе сегодня: %1$d</string>
+    <string name="tgb_nocoffee_ok">Кофе стерт. День снова считается без ответа, модель пересчитана без него.</string>
+    <string name="tgb_nocoffee_none">Стирать нечего: кофе сегодня не записан.</string>
     <string name="settings_mode">Режим</string>
     <string name="settings_mode_hint">Без рук - всё считывается само. Ручной добавляет в чат кнопки \"ложусь\", \"встал\" и кофе, для работы без браслета.</string>
     <string name="f_debt_title">Долг сна</string>
@@ -334,6 +337,7 @@
     <string name="log_coffee">Кофе +1</string>
     <string name="log_coffee_n">Кофе сегодня: %1$d</string>
     <string name="log_undo">Отменить</string>
+    <string name="log_reset">Стереть</string>
     <string name="log_mood">Как самочувствие?</string>
     <string name="log_mood_set">Записано: %1$s</string>
     <string name="log_mood_none">Сегодня не отмечено</string>

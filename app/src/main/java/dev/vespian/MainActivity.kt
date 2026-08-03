@@ -505,15 +505,26 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
             )
         }
         if (mugs > 0) {
-            TextButton(onClick = {
-                val next = mugs - 1
-                mugs = next
-                scope.launch {
-                    saveAnswer(context, next, null)
-                    onChanged()
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = {
+                    val next = mugs - 1
+                    mugs = next
+                    scope.launch {
+                        saveAnswer(context, next, null)
+                        onChanged()
+                    }
+                }) {
+                    Text(stringResource(R.string.log_undo))
                 }
-            }) {
-                Text(stringResource(R.string.log_undo))
+                TextButton(onClick = {
+                    mugs = 0
+                    scope.launch {
+                        clearDrink(context, coffee = true)
+                        onChanged()
+                    }
+                }) {
+                    Text(stringResource(R.string.log_reset))
+                }
             }
         }
 
@@ -540,15 +551,26 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
                 )
             }
             if (cans > 0) {
-                TextButton(onClick = {
-                    val next = cans - 1
-                    cans = next
-                    scope.launch {
-                        saveAnswer(context, null, null, cans = next)
-                        onChanged()
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = {
+                        val next = cans - 1
+                        cans = next
+                        scope.launch {
+                            saveAnswer(context, null, null, cans = next)
+                            onChanged()
+                        }
+                    }) {
+                        Text(stringResource(R.string.log_undo))
                     }
-                }) {
-                    Text(stringResource(R.string.log_undo))
+                    TextButton(onClick = {
+                        cans = 0
+                        scope.launch {
+                            clearDrink(context, cans = true)
+                            onChanged()
+                        }
+                    }) {
+                        Text(stringResource(R.string.log_reset))
+                    }
                 }
             }
         }
@@ -579,15 +601,26 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (doses > 0) {
-                TextButton(onClick = {
-                    val next = doses - 1
-                    doses = next
-                    scope.launch {
-                        saveAnswer(context, null, null, alcohol = next)
-                        onChanged()
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = {
+                        val next = doses - 1
+                        doses = next
+                        scope.launch {
+                            saveAnswer(context, null, null, alcohol = next)
+                            onChanged()
+                        }
+                    }) {
+                        Text(stringResource(R.string.log_undo))
                     }
-                }) {
-                    Text(stringResource(R.string.log_undo))
+                    TextButton(onClick = {
+                        doses = 0
+                        scope.launch {
+                            clearDrink(context, alcohol = true)
+                            onChanged()
+                        }
+                    }) {
+                        Text(stringResource(R.string.log_reset))
+                    }
                 }
             }
         }
@@ -721,6 +754,29 @@ private suspend fun saveAnswer(
             )
         )
         Commands.refitSoon(context)
+    }
+}
+
+private suspend fun clearDrink(
+    context: Context,
+    coffee: Boolean = false,
+    cans: Boolean = false,
+    alcohol: Boolean = false,
+) {
+    withContext(Dispatchers.IO) {
+        val db = Db.get(context)
+        val date = Commands.dayKey()
+        val existing = db.answers().byDate(date) ?: return@withContext
+        db.answers().put(
+            existing.copy(
+                mugs = if (coffee) null else existing.mugs,
+                cans = if (cans) null else existing.cans,
+                alcohol = if (alcohol) null else existing.alcohol,
+                at = System.currentTimeMillis(),
+            )
+        )
+        Engine.invalidate()
+        Commands.refitSoon(context, force = true)
     }
 }
 
