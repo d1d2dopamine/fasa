@@ -16,11 +16,15 @@ jobs:
         with:
           gradle-version: '8.13'
 
-      - name: Build debug APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+      # Release, not debug. Same signing key, so it installs straight over the
+      # previous build, but Compose and Kotlin are compiled with optimisations
+      # on. Debug builds recompose far slower, which is what made switching
+      # screens visibly stall.
+      - name: Build release APK
+        run: gradle assembleRelease --no-daemon --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
           name: vespian-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
