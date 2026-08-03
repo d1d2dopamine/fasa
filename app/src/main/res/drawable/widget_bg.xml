@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Same card colour as the app, so the widget does not look borrowed. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#141E2C" />
+    <corners android:radius="20dp" />
+    <stroke
+        android:width="1dp"
+        android:color="#1D2A3C" />
+</shape>

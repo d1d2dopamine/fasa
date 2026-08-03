@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Refreshed by the hourly worker, not by this period: the launcher is
+     allowed to ignore anything shorter than half an hour anyway. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="70dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="1"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/widget_forecast"
+    android:previewLayout="@layout/widget_forecast"
+    android:description="@string/widget_desc"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen" />

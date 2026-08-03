@@ -94,3 +94,101 @@ fun Histogram(
         }
     }
 }
+
+// History of promises. One column per measured night: the vertical bar is the
+// onset band the model published that evening, the dot is when sleep actually
+// started. A dot inside its bar is a hit, outside is a miss. Nights recorded
+// before the model began writing its forecasts down have no bar, only a dot,
+// and they are drawn dim so they cannot be mistaken for a score.
+@Composable
+fun NightsChart(
+    actual: List<Double>,
+    predLow: List<Double?>,
+    predHigh: List<Double?>,
+    hitColor: Color,
+    missColor: Color,
+    plainColor: Color,
+    bandColor: Color,
+    gridColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier = modifier) {
+        if (actual.isEmpty()) return@Canvas
+
+        val values = mutableListOf<Double>()
+        values.addAll(actual)
+        predLow.filterNotNull().forEach { values.add(it) }
+        predHigh.filterNotNull().forEach { values.add(it) }
+        val lo = values.min() - 0.5
+        val hi = values.max() + 0.5
+        val span = max(hi - lo, 1.0)
+
+        for (i in 0..3) {
+            val y = size.height * i / 3f
+            drawLine(gridColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+        }
+
+        val slot = size.width / actual.size
+        val barWidth = max(slot * 0.34f, 6f)
+
+        fun py(v: Double): Float =
+            size.height - (((v - lo) / span) * size.height).toFloat()
+
+        actual.indices.forEach { i ->
+            val cx = slot * i + slot / 2f
+            val low = predLow.getOrNull(i)
+            val high = predHigh.getOrNull(i)
+            val point = actual[i]
+
+            if (low != null && high != null) {
+                val top = py(high)
+                val bottom = py(low)
+                drawRect(
+                    color = bandColor,
+                    topLeft = Offset(cx - barWidth / 2f, top),
+                    size = Size(barWidth, max(bottom - top, 2f)),
+                )
+            }
+
+            val color = when {
+                low == null || high == null -> plainColor
+                point >= low && point <= high -> hitColor
+                else -> missColor
+            }
+            drawCircle(color, radius = max(barWidth * 0.36f, 5f), center = Offset(cx, py(point)))
+        }
+    }
+}
+
+// Light over one day, one bar per hour. The scale is compressed the same way
+// the model compresses it, so a bar is drawn by how much that hour could move
+// the clock, not by the raw number of lux.
+@Composable
+fun LightDay(
+    doses: List<Double>,
+    barColor: Color,
+    dimColor: Color,
+    baseColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier = modifier) {
+        if (doses.isEmpty()) return@Canvas
+        val gap = size.width / doses.size * 0.22f
+        val w = size.width / doses.size - gap
+        drawLine(
+            baseColor,
+            Offset(0f, size.height),
+            Offset(size.width, size.height),
+            strokeWidth = 2f,
+        )
+        doses.forEachIndexed { i, d ->
+            val v = d.coerceIn(0.0, 1.0)
+            val h = max((size.height * v).toFloat(), 2f)
+            drawRect(
+                color = if (v < 0.02) dimColor else barColor,
+                topLeft = Offset(i * (w + gap) + gap / 2f, size.height - h),
+                size = Size(w, h),
+            )
+        }
+    }
+}

@@ -67,8 +67,13 @@ android {
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("debug")
         }
+        // Signed with the same key as debug on purpose: the release build must
+        // install straight over an existing debug install, and this key guards
+        // nothing. What changes is the compiler: Compose and Kotlin optimise
+        // the release variant, which is where the screen stalls came from.
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

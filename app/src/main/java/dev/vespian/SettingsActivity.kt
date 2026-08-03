@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -104,15 +105,65 @@ class SettingsActivity : AppCompatActivity() {
     }
 }
 
+/**
+ * Frame around the settings body.
+ *
+ * Standalone: its own title bar, its own scroll, its own side padding.
+ * Embedded: nothing at all, because the host screen already has all three.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsShell(
+    onBack: (() -> Unit)?,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    if (onBack == null) {
+        Column(modifier = Modifier.fillMaxWidth()) { content() }
+        return
+    }
+
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.btn_settings)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    }
+                },
+            )
+        },
+    ) { inner ->
+        Column(
+            modifier = Modifier
+                .padding(inner)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+            content = content,
+        )
+    }
+}
+
 private val OkGreen = Color(0xFF57C08B)
 private val WarnAmber = Color(0xFFFFB74D)
 private val FailCoral = Color(0xFFFF7B72)
 
 private const val REPO_URL = "https://github.com/d1d2dopamine/vespian"
 
+/**
+ * Settings, used in two places.
+ *
+ * With [onBack] it is its own screen with a title bar and a back arrow, which
+ * is what the onboarding walkthrough opens. With `null` it is embedded as a
+ * tab inside the main screen, which already provides the bar, the scrolling
+ * and the padding. Embedding must not add a second scroll container: two
+ * nested vertical scrolls in Compose are a crash, not a layout quirk.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsScreen(onBack: () -> Unit) {
+internal fun SettingsScreen(onBack: (() -> Unit)?) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -168,26 +219,7 @@ private fun SettingsScreen(onBack: () -> Unit) {
         }
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.btn_settings)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                    }
-                },
-            )
-        },
-    ) { inner ->
-        Column(
-            modifier = Modifier
-                .padding(inner)
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-        ) {
+    SettingsShell(onBack) {
             Spacer(Modifier.height(8.dp))
 
             // ---- application ------------------------------------------------
@@ -681,7 +713,6 @@ private fun SettingsScreen(onBack: () -> Unit) {
             }
 
             Spacer(Modifier.height(24.dp))
-        }
     }
 
     if (confirmRefit) {

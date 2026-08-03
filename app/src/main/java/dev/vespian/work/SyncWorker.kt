@@ -7,6 +7,7 @@ import dev.vespian.db.Db
 import dev.vespian.db.Meta
 import dev.vespian.health.HealthRepo
 import dev.vespian.model.Engine
+import dev.vespian.model.PredLog
 import dev.vespian.tg.Bot
 
 /**
@@ -53,7 +54,25 @@ class SyncWorker(context: Context, params: WorkerParameters) :
         // health data we already imported.
         runCatching { Bot.tick(context) }
 
+        // Write down tonight's promise so the history chart can grade it in
+        // the morning. Only in the evening, and only once per night.
+        runCatching { recordPrediction(context) }
+
+        // The home screen must never show a number older than the model.
+        runCatching { ForecastWidget.refresh(context) }
+
         return Result.success()
+    }
+
+    // A forecast is only worth grading if it was made before the night it
+    // describes. Anything computed after sleep began would be a hindsight
+    // score, which is worse than no score at all.
+    private suspend fun recordPrediction(context: Context) {
+        val now = System.currentTimeMillis()
+        val hour = Engine.hourOf(now)
+        if (hour < EVENING_FROM_H && hour >= EVENING_TO_H) return
+        val forecast = Engine.forecast(context)
+        PredLog.record(context, forecast, now)
     }
 
     // A night arrives roughly once a day. Thirty hours of silence means the
@@ -83,6 +102,10 @@ class SyncWorker(context: Context, params: WorkerParameters) :
         private const val HOUR_MS = 60 * 60 * 1000L
         private const val DAY_MS = 24 * HOUR_MS
         private const val STALE_AFTER_MS = 30 * HOUR_MS
+
+        // Local hours. The window wraps past midnight on purpose.
+        private const val EVENING_FROM_H = 18.0
+        private const val EVENING_TO_H = 4.0
         private const val PRUNE_AFTER_MS = 90 * DAY_MS
     }
 }

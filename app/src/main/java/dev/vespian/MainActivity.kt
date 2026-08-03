@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -26,7 +27,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.LocalCafe
 import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.Refresh
@@ -79,10 +84,14 @@ import dev.vespian.model.Delay
 import dev.vespian.model.Engine
 import dev.vespian.model.Filter
 import dev.vespian.model.Forecast
+import dev.vespian.model.Physics
+import dev.vespian.model.PredLog
 import dev.vespian.tg.Commands
 import dev.vespian.ui.DayRing
 import dev.vespian.ui.DriftChart
 import dev.vespian.ui.Histogram
+import dev.vespian.ui.LightDay
+import dev.vespian.ui.NightsChart
 import dev.vespian.ui.VespianTheme
 import dev.vespian.ui.RingArc
 import kotlinx.coroutines.Dispatchers
@@ -121,7 +130,42 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
-private enum class Tab { TODAY, DRIFT, MODEL, DATA }
+private enum class Tab { TODAY, DRIFT, MODEL, DATA, SETTINGS }
+
+/**
+ * What every tab had on screen the last time it was open.
+ *
+ * Compose throws away the state of a tab the moment another one is selected,
+ * so without this every switch went back to an empty screen and a loading
+ * circle while the model was recomputed. The cache is deliberately plain: it
+ * is a snapshot for drawing, never a source of truth. Every tab still reloads
+ * in the background and overwrites what is here.
+ */
+private object UiCache {
+    var forecast: Forecast? = null
+    var delay: Delay.Info? = null
+    var debt: Int? = null
+    var latency: Double? = null
+    var obs: IntArray? = null
+    var filter: Filter? = null
+    var nights: Int = 0
+    var history: List<PredLog.Row>? = null
+    var light: List<Double>? = null
+    var lightSamples: Int = 0
+    var lightPeak: Float = 0f
+    var lightBright: Int = 0
+}
+
+/** Nights drawn in the history chart. Two weeks, as asked. */
+private const val HISTORY_NIGHTS = 14
+
+/** One day of light, one bar per hour. */
+private const val LIGHT_HOURS = 24
+
+private const val HOUR_MS = 60 * 60 * 1000L
+
+/** Bright enough to matter for the clock. Daylight starts around here. */
+private const val BRIGHT_LUX = 1000f
 
 private fun hhmm(hour: Double): String =
     SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(Engine.millisOf(hour)))
@@ -141,16 +185,9 @@ fun AppScreen() {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.app_name)) },
-                actions = {
-                    IconButton(onClick = {
-                        context.startActivity(Intent(context, SettingsActivity::class.java))
-                    }) {
-                        Icon(Icons.Filled.Settings, contentDescription = null)
-                    }
-                },
-            )
+            // No settings button here any more: settings are a tab of their
+            // own now, and two ways into the same screen is one too many.
+            TopAppBar(title = { Text(stringResource(R.string.app_name)) })
         },
         bottomBar = {
             NavigationBar {
@@ -158,6 +195,7 @@ fun AppScreen() {
                 NavItem(tab, Tab.DRIFT, Icons.Filled.Timeline, R.string.tab_drift) { tab = it }
                 NavItem(tab, Tab.MODEL, Icons.Filled.Science, R.string.tab_model) { tab = it }
                 NavItem(tab, Tab.DATA, Icons.Filled.MonitorHeart, R.string.tab_data) { tab = it }
+                NavItem(tab, Tab.SETTINGS, Icons.Filled.Tune, R.string.tab_settings) { tab = it }
             }
         },
     ) { inner ->
@@ -173,6 +211,7 @@ fun AppScreen() {
                 Tab.DRIFT -> DriftTab(refresh)
                 Tab.MODEL -> ModelTab(refresh) { refresh++ }
                 Tab.DATA -> DataTab(refresh) { refresh++ }
+                Tab.SETTINGS -> SettingsScreen(onBack = null)
             }
             Spacer(Modifier.height(24.dp))
         }
@@ -286,31 +325,130 @@ private fun BandRow(color: Color, labelRes: Int, band: Band) {
     }
 }
 
+/**
+ * The same explanation the bot gives for /why, on the screen where the numbers
+ * actually live. Collapsed by default: it is a reason, not a headline.
+ *
+ * Every line here is built from the model that produced the bands above. No
+ * line is printed unless the quantity behind it exists.
+ */
+@Composable
+private fun WhyCard(f: Forecast, latency: Double?, obs: IntArray?) {
+    var open by remember { mutableStateOf(false) }
+
+    SectionCard {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { open = !open },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Label(stringResource(R.string.f_why))
+            }
+            Icon(
+                if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        if (!open) return@SectionCard
+
+        Spacer(Modifier.height(12.dp))
+        val body = MaterialTheme.typography.bodyMedium
+        val dim = MaterialTheme.colorScheme.onSurfaceVariant
+
+        Text(
+            stringResource(R.string.tgb_why_head, hhmm(f.gate.median), hhmm(f.onset.median)),
+            style = body,
+        )
+        Spacer(Modifier.height(10.dp))
+        latency?.let {
+            Text(stringResource(R.string.tgb_why_latency, it.roundToInt()), style = body, color = dim)
+        }
+        Text(stringResource(R.string.tgb_why_wake, hhmm(f.wake.median)), style = body, color = dim)
+        Text(
+            stringResource(R.string.tgb_why_drift, (f.driftPerDay * 60.0).roundToInt()),
+            style = body,
+            color = dim,
+        )
+        val mg = f.caffeineNow.roundToInt()
+        Text(
+            if (mg > 0) stringResource(R.string.tgb_why_caffeine, mg)
+            else stringResource(R.string.tgb_why_caffeine_none),
+            style = body,
+            color = dim,
+        )
+
+        Spacer(Modifier.height(10.dp))
+        Text(
+            stringResource(
+                R.string.tgb_why_spread,
+                hhmm(f.onset.low),
+                hhmm(f.onset.high),
+                (f.onset.width * 60.0).roundToInt(),
+            ),
+            style = body,
+        )
+        val trust = when {
+            f.onset.confidence >= 0.66 -> R.string.tgb_why_trust_high
+            f.onset.confidence >= 0.33 -> R.string.tgb_why_trust_mid
+            else -> R.string.tgb_why_trust_low
+        }
+        Text(stringResource(trust, f.nights), style = body, color = dim)
+
+        // Where the evidence came from. A night spent on the phone past an
+        // open gate only bounds the answer from above, and saying so out loud
+        // is the difference between a model and a fortune teller.
+        val o = obs
+        if (o != null && o.size >= 3 && (o[0] + o[1] + o[2]) > 0) {
+            Spacer(Modifier.height(10.dp))
+            Text(stringResource(R.string.tgb_why_basis, o[0], o[1]), style = body, color = dim)
+            if (o[2] > 0) {
+                Text(stringResource(R.string.tgb_why_anchor, o[2]), style = body, color = dim)
+            }
+        }
+    }
+}
+
 // ---- today ---------------------------------------------------------------
 
 @Composable
 private fun TodayTab(refresh: Int, onChanged: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var forecast by remember { mutableStateOf<Forecast?>(null) }
-    var delay by remember { mutableStateOf<Delay.Info?>(null) }
-    var debt by remember { mutableStateOf<Int?>(null) }
+    // Seeded from the last visit. Switching tabs must not throw the screen
+    // away and rebuild it from an empty state.
+    var forecast by remember { mutableStateOf(UiCache.forecast) }
+    var delay by remember { mutableStateOf(UiCache.delay) }
+    var debt by remember { mutableStateOf(UiCache.debt) }
+    var latency by remember { mutableStateOf(UiCache.latency) }
+    var obs by remember { mutableStateOf(UiCache.obs) }
     var failed by remember { mutableStateOf(false) }
 
     LaunchedEffect(refresh) {
         failed = false
-        forecast = null
         val f = runCatching { Engine.forecast(context) }.getOrNull()
-        if (f == null) failed = true else forecast = f
+        if (f == null) failed = true else { forecast = f; UiCache.forecast = f }
+        latency = runCatching {
+            val values = Engine.load(context).particles.map { it.latency }.sorted()
+            values[values.size / 2]
+        }.getOrNull()
+        UiCache.latency = latency
+        obs = runCatching { Engine.obsStats(context) }.getOrNull()
+        UiCache.obs = obs
         delay = runCatching { Delay.estimate(context) }.getOrNull()
+        UiCache.delay = delay
         // Pressure that had not reached the floor when the night ended. Shown
         // here so the number does not live only inside a chat command.
         debt = runCatching {
             Math.round(Engine.load(context).debtBandMinutes().median).toInt()
         }.getOrNull()
+        UiCache.debt = debt
     }
 
-    if (failed) {
+    if (failed && forecast == null) {
         SectionCard { Text(stringResource(R.string.f_error)) }
         return
     }
@@ -365,6 +503,8 @@ private fun TodayTab(refresh: Int, onChanged: () -> Unit) {
         BandRow(onsetColor, R.string.f_onset, f.onset)
         BandRow(wakeColor, R.string.f_wake, f.wake)
     }
+
+    WhyCard(f, latency, obs)
 
     debt?.let { minutes ->
         if (f.nights > 0) {
@@ -807,10 +947,16 @@ private fun pickAlarm(
 @Composable
 private fun DriftTab(refresh: Int) {
     val context = LocalContext.current
-    var forecast by remember { mutableStateOf<Forecast?>(null) }
+    var forecast by remember { mutableStateOf(UiCache.forecast) }
+    var history by remember { mutableStateOf(UiCache.history) }
 
     LaunchedEffect(refresh) {
-        forecast = runCatching { Engine.forecast(context) }.getOrNull()
+        runCatching { Engine.forecast(context) }.getOrNull()?.let {
+            forecast = it
+            UiCache.forecast = it
+        }
+        history = runCatching { PredLog.history(context, HISTORY_NIGHTS) }.getOrNull()
+        UiCache.history = history
     }
 
     val f = forecast ?: run {
@@ -853,6 +999,8 @@ private fun DriftTab(refresh: Int) {
         )
     }
 
+    HistoryCard(history)
+
     SectionCard {
         Label(stringResource(R.string.f_week))
         for (day in 1..7) {
@@ -865,19 +1013,89 @@ private fun DriftTab(refresh: Int) {
     }
 }
 
+/**
+ * Two weeks of nights, each next to the band that was promised for it.
+ *
+ * A forecast that is never written down cannot be wrong, so the app started
+ * saving its evening band only from the version that shipped this card.
+ * Nights recorded before that have no band and are drawn plain. They are not
+ * counted in the score, because scoring a promise nobody made would be a lie.
+ */
+@Composable
+private fun HistoryCard(rows: List<PredLog.Row>?) {
+    SectionCard {
+        Label(stringResource(R.string.f_hist))
+        Spacer(Modifier.height(12.dp))
+
+        if (rows.isNullOrEmpty()) {
+            Text(
+                stringResource(R.string.f_hist_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return@SectionCard
+        }
+
+        NightsChart(
+            actual = rows.map { it.actual },
+            predLow = rows.map { it.pred?.low },
+            predHigh = rows.map { it.pred?.high },
+            hitColor = MaterialTheme.colorScheme.primary,
+            missColor = MaterialTheme.colorScheme.error,
+            plainColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            bandColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
+            gridColor = MaterialTheme.colorScheme.outlineVariant,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(170.dp),
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        val graded = rows.count { it.hit != null }
+        if (graded == 0) {
+            Text(
+                stringResource(R.string.f_hist_wait, rows.size),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            val hits = rows.count { it.hit == true }
+            InfoRow(
+                stringResource(R.string.f_hist_score),
+                stringResource(R.string.f_hist_score_v, hits, graded),
+            )
+            PredLog.typicalMiss(rows)?.let {
+                InfoRow(stringResource(R.string.f_hist_miss), stringResource(R.string.f_hist_miss_v, it))
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+        Text(
+            stringResource(R.string.f_hist_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
 // ---- model ---------------------------------------------------------------
 
 @Composable
 private fun ModelTab(refresh: Int, onChanged: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var filter by remember { mutableStateOf<Filter?>(null) }
-    var nights by remember { mutableIntStateOf(0) }
+    var filter by remember { mutableStateOf(UiCache.filter) }
+    var nights by remember { mutableIntStateOf(UiCache.nights) }
     var busy by remember { mutableStateOf(false) }
 
     LaunchedEffect(refresh) {
-        filter = runCatching { Engine.load(context) }.getOrNull()
-        nights = runCatching { Db.get(context).nights().count() }.getOrDefault(0)
+        runCatching { Engine.load(context) }.getOrNull()?.let {
+            filter = it
+            UiCache.filter = it
+        }
+        nights = runCatching { Db.get(context).nights().count() }.getOrDefault(nights)
+        UiCache.nights = nights
     }
 
     val f = filter ?: run {
@@ -938,6 +1156,10 @@ private fun DataTab(refresh: Int, onChanged: () -> Unit) {
     var nights by remember { mutableIntStateOf(0) }
     var lastWake by remember { mutableStateOf<Long?>(null) }
     var lastNight by remember { mutableStateOf<dev.vespian.db.Night?>(null) }
+    var light by remember { mutableStateOf(UiCache.light) }
+    var lightSamples by remember { mutableIntStateOf(UiCache.lightSamples) }
+    var lightPeak by remember { mutableStateOf(UiCache.lightPeak) }
+    var lightBright by remember { mutableIntStateOf(UiCache.lightBright) }
     var notice by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var exporting by remember { mutableStateOf(false) }
@@ -997,13 +1219,46 @@ private fun DataTab(refresh: Int, onChanged: () -> Unit) {
                 HealthRepo.Status.NEEDS_UPDATE -> R.string.hc_update
                 HealthRepo.Status.NOT_INSTALLED -> R.string.hc_missing
             }
+            // Light of the last twenty four hours, folded into hourly bars.
+            // Bars are drawn by circadian dose, not raw lux: the model reads
+            // light that way, and a linear axis would hide every indoor hour
+            // next to one minute outdoors.
+            runCatching {
+                val now = System.currentTimeMillis()
+                val from = now - LIGHT_HOURS * HOUR_MS
+                val samples = withContext(Dispatchers.IO) {
+                    db.light().between(from, now)
+                }
+                val sums = DoubleArray(LIGHT_HOURS)
+                val counts = IntArray(LIGHT_HOURS)
+                var peak = 0f
+                var bright = 0
+                samples.forEach { s ->
+                    val idx = (((s.at - from) / HOUR_MS).toInt()).coerceIn(0, LIGHT_HOURS - 1)
+                    sums[idx] = sums[idx] + Physics.dose(s.lux.toDouble())
+                    counts[idx] = counts[idx] + 1
+                    if (s.lux > peak) peak = s.lux
+                    if (s.lux >= BRIGHT_LUX) bright++
+                }
+                light = (0 until LIGHT_HOURS).map { i ->
+                    if (counts[i] == 0) 0.0 else sums[i] / counts[i]
+                }
+                lightSamples = samples.size
+                lightPeak = peak
+                lightBright = bright
+                UiCache.light = light
+                UiCache.lightSamples = lightSamples
+                UiCache.lightPeak = lightPeak
+                UiCache.lightBright = lightBright
+            }
+
             loaded = true
             first = false
             kotlinx.coroutines.delay(60_000L)
         }
     }
 
-    if (!loaded) {
+    if (!loaded && light == null) {
         Loading()
         return
     }
@@ -1083,6 +1338,61 @@ private fun DataTab(refresh: Int, onChanged: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+    }
+
+    // The light the phone actually saw. This is a measurement, not a model
+    // output: an empty stretch means the sensor was covered or the service was
+    // down, and that is exactly what the flat bars say.
+    SectionCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Filled.LightMode,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.size(10.dp))
+            Label(stringResource(R.string.d_light))
+        }
+        Spacer(Modifier.height(12.dp))
+
+        val bars = light
+        if (bars == null || lightSamples == 0) {
+            Text(
+                stringResource(R.string.d_light_none),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            LightDay(
+                doses = bars,
+                barColor = MaterialTheme.colorScheme.secondary,
+                dimColor = MaterialTheme.colorScheme.outlineVariant,
+                baseColor = MaterialTheme.colorScheme.outlineVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(140.dp),
+            )
+            Spacer(Modifier.height(12.dp))
+            InfoRow(
+                stringResource(R.string.d_light_peak),
+                stringResource(R.string.d_light_lux, lightPeak.roundToInt()),
+            )
+            InfoRow(
+                stringResource(R.string.d_light_bright),
+                stringResource(R.string.d_light_samples, lightBright),
+            )
+            InfoRow(
+                stringResource(R.string.d_light_count),
+                stringResource(R.string.d_light_samples, lightSamples),
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                stringResource(R.string.d_light_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 

@@ -411,4 +411,38 @@
     <string name="settings_drinks_can_field">mg per can</string>
     <string name="settings_drinks_alcohol">Alcohol</string>
     <string name="settings_drinks_alcohol_hint">Counted in drinks, not millilitres. Alcohol is not treated as caffeine: it shortens the wait for sleep and takes part of the night\'s recovery away.</string>
+
+    <!-- Settings as a tab of the main screen -->
+    <string name="tab_settings">Settings</string>
+
+    <!-- Why this forecast, inside the app -->
+    <string name="f_why">Why this forecast</string>
+
+    <!-- History of predictions against measured nights -->
+    <string name="f_hist">Last two weeks</string>
+    <string name="f_hist_empty">No measured nights yet. The chart fills in as nights arrive.</string>
+    <string name="f_hist_wait">%1$d nights measured. None of them had a saved forecast yet, so nothing is scored. Grading starts with tonight.</string>
+    <string name="f_hist_score">Landed in the window</string>
+    <string name="f_hist_score_v">%1$d of %2$d</string>
+    <string name="f_hist_miss">Typical miss</string>
+    <string name="f_hist_miss_v">%1$d min</string>
+    <string name="f_hist_hint">Bar is the window the model published that evening, dot is when you actually fell asleep. Nights without a bar were recorded before the app started saving its forecasts.</string>
+
+    <!-- Light over the last day -->
+    <string name="d_light">Light, last 24 hours</string>
+    <string name="d_light_none">No light samples yet. The sampler writes one reading every five minutes while the service runs.</string>
+    <string name="d_light_peak">Brightest reading</string>
+    <string name="d_light_lux">%1$d lux</string>
+    <string name="d_light_bright">Readings above 1000 lux</string>
+    <string name="d_light_count">Readings total</string>
+    <string name="d_light_samples">%1$d</string>
+    <string name="d_light_hint">Bar height is how much that hour could move your clock, not raw lux. Light saturates: 300 lux is already half the effect of 3000.</string>
+
+    <!-- Home screen widget -->
+    <string name="widget_title">ASLEEP AROUND</string>
+    <string name="widget_none">No forecast</string>
+    <string name="widget_range">%1$s to %2$s</string>
+    <string name="widget_gate">Window opens %1$s</string>
+    <string name="widget_desc">Tonight\'s sleep window at a glance.</string>
+
 </resources>

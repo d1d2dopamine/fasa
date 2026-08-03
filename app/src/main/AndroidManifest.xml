@@ -79,6 +79,19 @@
             </intent-filter>
         </receiver>
 
+        <!-- Home screen widget with tonight's window. Exported because the
+             launcher itself sends the update broadcast. -->
+        <receiver
+            android:name=".work.ForecastWidget"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_forecast_info" />
+        </receiver>
+
         <!-- Fires every fifteen minutes and restarts the service if the
              heartbeat has gone stale. Not exported: only our own alarm. -->
         <receiver

@@ -158,7 +158,7 @@
     <!-- Поведенческая задержка -->
     <string name="f_habit">Реальный отбой</string>
     <string name="f_habit_delay">%1$s к окну, по %2$d ночам</string>
-    <string name="f_habit_unknown">Ночей пока мало, привычку засиживаться после окна модель ещё не вы��чила.</string>
+    <string name="f_habit_unknown">Ночей пока мало, привычку засиживаться после окна м��дель ещё не вы��чила.</string>
     <!-- Экспорт -->
     <string name="btn_export">Скачать историю</string>
     <string name="export_hint">Один файл JSON со всеми ночами, ответами и параметрами модели. Текст внутри английский, чтобы его понял врач или нейросеть.</string>
@@ -190,7 +190,7 @@
     <string name="ob_health">Health Connect</string>
     <string name="ob_health_body">Сон и пульс с браслета.</string>
     <string name="ob_notif">Уведомления</string>
-    <string name="ob_notif_body">Нужны для датчика света и предупр��ждений о застое данных.</string>
+    <string name="ob_notif_body">Нужны для датчика света и пред��пр��ждений о застое данных.</string>
     <string name="ob_battery">Оптимизация батареи</string>
     <string name="ob_battery_body">Выключи её, иначе ежечасная синхронизация будет убита.</string>
     <string name="ob_autostart">Автозапуск</string>
@@ -411,4 +411,38 @@
     <string name="settings_drinks_can_field">мг на банку</string>
     <string name="settings_drinks_alcohol">Алкоголь</string>
     <string name="settings_drinks_alcohol_hint">Считается в дозах, а не в миллилитрах. Алкоголь не приравнивается к кофеину: он сокращает время засыпания и забирает часть восстановления за ночь.</string>
+
+    <!-- Settings as a tab of the main screen -->
+    <string name="tab_settings">Настройки</string>
+
+    <!-- Why this forecast, inside the app -->
+    <string name="f_why">Почему такой прогноз</string>
+
+    <!-- History of predictions against measured nights -->
+    <string name="f_hist">Последние две недели</string>
+    <string name="f_hist_empty">Измеренных ночей пока нет. График заполнится по мере ночей.</string>
+    <string name="f_hist_wait">Измерено ночей: %1$d. Ни для одной из них прогноз не был сохранен, поэтому оценки нет. Проверка начинается с сегодняшней ночи.</string>
+    <string name="f_hist_score">Попало в окно</string>
+    <string name="f_hist_score_v">%1$d из %2$d</string>
+    <string name="f_hist_miss">Обычный промах</string>
+    <string name="f_hist_miss_v">%1$d мин</string>
+    <string name="f_hist_hint">Полоса — окно, которое модель обещала в тот вечер, точка — когда ты реально уснул. Ночи без полосы записаны до того, как приложение начало сохранять прогнозы.</string>
+
+    <!-- Light over the last day -->
+    <string name="d_light">Свет за сутки</string>
+    <string name="d_light_none">Замеров света пока нет. Датчик пишет одно значение каждые пять минут, пока работает служба.</string>
+    <string name="d_light_peak">Самый яркий замер</string>
+    <string name="d_light_lux">%1$d люкс</string>
+    <string name="d_light_bright">Замеров ярче 1000 люкс</string>
+    <string name="d_light_count">Всего замеров</string>
+    <string name="d_light_samples">%1$d</string>
+    <string name="d_light_hint">Высота столбика — насколько этот час мог сдвинуть твои часы, а не сырые люксы. Свет насыщается: 300 люкс — уже половина эффекта от 3000.</string>
+
+    <!-- Home screen widget -->
+    <string name="widget_title">ЗАСНЕШЬ ОКОЛО</string>
+    <string name="widget_none">Прогноза нет</string>
+    <string name="widget_range">с %1$s до %2$s</string>
+    <string name="widget_gate">Окно откроется в %1$s</string>
+    <string name="widget_desc">Окно сна на сегодня одним взглядом.</string>
+
 </resources>
