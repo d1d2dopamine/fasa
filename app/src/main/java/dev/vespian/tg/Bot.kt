@@ -263,6 +263,22 @@ object Bot {
             return
         }
 
+        // "Do not ask again" on a drink question. Silences the morning drink
+        // question for good; the counters in the app and the commands in the
+        // chat keep working, and the switch in Settings brings it back.
+        if (data.startsWith("q:")) {
+            Prefs.setAskDrinks(context, false)
+            val mid = cb.optJSONObject("message")?.optInt("message_id")
+            if (mid != null && mid != 0) {
+                Telegram.editText(
+                    token, chat, mid,
+                    Lang.string(context, R.string.tg_ask_off),
+                )
+            }
+            clearAsked(context)
+            return
+        }
+
         val parts = data.split(":")
         if (parts.size != 3) return
         val kind = parts[0]
@@ -300,7 +316,14 @@ object Bot {
         // One question on screen at a time, in a fixed order: wellbeing,
         // coffee, then whichever extra drinks are switched on. Everything past
         // coffee is off by default, so by default this is still two taps.
-        val next = nextQuestion(context, updated)
+        // Wellbeing is about the morning that just happened, drinks are about
+        // the day the night started, so after the mood answer the chain has to
+        // change date rather than carry on with the same one.
+        val next = if (kind == "m") {
+            drinkDayAnswer(context)?.let { nextDrinkQuestion(context, it) }
+        } else {
+            nextDrinkQuestion(context, updated)
+        }
         if (next != null) {
             enqueue(context, next.first, next.second)
             markAsked(context)
@@ -320,23 +343,40 @@ object Bot {
     // clock alarm is exactly the thing that does not work for this user.
     private suspend fun maybeMorning(context: Context) {
         val db = Db.get(context)
-        val wake = db.nights().lastSleepEnd() ?: return
         val now = System.currentTimeMillis()
-        val age = now - wake
+        val night = db.nights().lastEnded(now) ?: return
+        val age = now - night.sleepEnd
         if (age < 20 * 60 * 1000L || age > MORNING_WINDOW_MS) return
 
-        val date = Instant.ofEpochMilli(wake).atZone(ZoneId.systemDefault()).toLocalDate().toString()
-        if (db.meta().get(K_MORNING) == date) return
+        val wakeDate = Instant.ofEpochMilli(night.sleepEnd)
+            .atZone(ZoneId.systemDefault()).toLocalDate().toString()
+        if (db.meta().get(K_MORNING) == wakeDate) return
 
-        val existing = db.answers().byDate(date)
-        val question = nextQuestion(
-            context,
-            existing ?: Answer(dateKey = date, mood = null, mugs = null, at = now),
-        ) ?: return
+        // Wellbeing belongs to the morning it is asked about. Drinks belong to
+        // the day the night began: coffee drunk before falling asleep is not
+        // coffee drunk today, and writing it to today is what produced a mug
+        // nobody had.
+        val morning = db.answers().byDate(wakeDate)
+        val question = if (morning?.mood == null) {
+            Lang.string(context, R.string.tg_q_mood) to moodKeyboard(context, wakeDate)
+        } else {
+            drinkDayAnswer(context)?.let { nextDrinkQuestion(context, it) }
+        } ?: return
 
         enqueue(context, question.first, question.second)
-        db.meta().put(Meta(K_MORNING, date))
+        db.meta().put(Meta(K_MORNING, wakeDate))
         markAsked(context)
+    }
+
+    // The answer row for the day the last finished night started, created empty
+    // when nothing was logged that day.
+    private suspend fun drinkDayAnswer(context: Context): Answer? {
+        val db = Db.get(context)
+        val now = System.currentTimeMillis()
+        val night = db.nights().lastEnded(now) ?: return null
+        val date = Commands.dayKey(night.sleepStart)
+        return db.answers().byDate(date)
+            ?: Answer(dateKey = date, mood = null, mugs = null, at = now)
     }
 
     // Two hours before the predicted window, once a day. Not a question.
@@ -409,22 +449,31 @@ object Bot {
         forcedRow(context, date),
     )
 
+    // Only the drink questions carry it: wellbeing is one tap and is what the
+    // filter leans on hardest, so it stays.
+    private fun askOffRow(context: Context): JSONArray = Telegram.row(
+        Lang.string(context, R.string.tg_ask_off_btn) to "q:0"
+    )
+
     private fun mugsKeyboard(context: Context, date: String): JSONArray = Telegram.keyboard(
         Telegram.row("0" to "c:$date:0", "1" to "c:$date:1", "2" to "c:$date:2"),
         Telegram.row("3" to "c:$date:3", "4" to "c:$date:4", "5+" to "c:$date:5"),
         forcedRow(context, date),
+        askOffRow(context),
     )
 
     private fun cansKeyboard(context: Context, date: String): JSONArray = Telegram.keyboard(
         Telegram.row("0" to "e:$date:0", "1" to "e:$date:1", "2" to "e:$date:2"),
         Telegram.row("3" to "e:$date:3", "4" to "e:$date:4", "5+" to "e:$date:5"),
         forcedRow(context, date),
+        askOffRow(context),
     )
 
     private fun alcoholKeyboard(context: Context, date: String): JSONArray = Telegram.keyboard(
         Telegram.row("0" to "a:$date:0", "1" to "a:$date:1", "2" to "a:$date:2"),
         Telegram.row("3" to "a:$date:3", "4" to "a:$date:4", "5+" to "a:$date:5"),
         forcedRow(context, date),
+        askOffRow(context),
     )
 
     /**
@@ -436,9 +485,8 @@ object Bot {
      * of day the model needs in order to tell a strong reaction apart from a
      * slow one, so "none" is recorded rather than left blank.
      */
-    private fun nextQuestion(context: Context, answer: Answer): Pair<String, JSONArray>? = when {
-        answer.mood == null ->
-            Lang.string(context, R.string.tg_q_mood) to moodKeyboard(context, answer.dateKey)
+    private fun nextDrinkQuestion(context: Context, answer: Answer): Pair<String, JSONArray>? = when {
+        !Prefs.askDrinks(context) -> null
         answer.mugs == null ->
             Lang.string(context, R.string.tg_q_mugs) to mugsKeyboard(context, answer.dateKey)
         Prefs.energyOn(context) && answer.cans == null ->

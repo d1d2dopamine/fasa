@@ -95,7 +95,7 @@
     <string name="st_hr_found">Пульс: %1$d замеров за 24 часа</string>
     <string name="st_hr_none">Пульс: замеров за 24 часа нет</string>
     <string name="st_hr_coverage_ok">Покрытие пульса: %1$d из 24 часов. Фоновые замеры работают.</string>
-    <string name="st_hr_coverage_low">Покрытие пульса: только %1$d из 24 часов. Либо связь подключена недавно, ��ибо браслет пишет только на тренировках.</string>
+    <string name="st_hr_coverage_low">Покрытие пульса: только %1$d из 24 часов. Либо связь подключена недавно, либо браслет пишет только на тренировках.</string>
 
     <string name="st_spo2_found">Кислород: %1$d записей за 7 дней</string>
     <string name="st_spo2_none">Кислород: записей нет. У Band 9 Active нет датчика SpO2, это нормально.</string>
@@ -144,7 +144,9 @@
     <string name="tg_mood_done">Самочувствие: %1$s</string>
     <string name="tg_mugs_done">Кофе: %1$d кружек</string>
     <string name="tg_q_mood">Как спалось? 1 разбит, 5 отлично.</string>
-    <string name="tg_q_mugs">Сколько кружек кофе было вчера?</string>
+    <string name="tg_q_mugs">Сколько кружек кофе было перед этой ночью?</string>
+    <string name="tg_ask_off_btn">Больше не спрашивать</string>
+    <string name="tg_ask_off">Больше не спрашиваю про напитки по утрам. Счетчики в приложении и команды в чате работают, вернуть вопрос можно в настройках.</string>
     <string name="tg_mood_1">разбит</string>
     <string name="tg_mood_2">вяло</string>
     <string name="tg_mood_3">нормально</string>
@@ -156,7 +158,7 @@
     <!-- Поведенческая задержка -->
     <string name="f_habit">Реальный отбой</string>
     <string name="f_habit_delay">%1$s к окну, по %2$d ночам</string>
-    <string name="f_habit_unknown">Ночей пока мало, привычку засиживаться после окна модель ещё не выучила.</string>
+    <string name="f_habit_unknown">Ночей пока мало, привычку засиживаться после окна модель ещё не вы��чила.</string>
     <!-- Экспорт -->
     <string name="btn_export">Скачать историю</string>
     <string name="export_hint">Один файл JSON со всеми ночами, ответами и параметрами модели. Текст внутри английский, чтобы его понял врач или нейросеть.</string>
@@ -188,7 +190,7 @@
     <string name="ob_health">Health Connect</string>
     <string name="ob_health_body">Сон и пульс с браслета.</string>
     <string name="ob_notif">Уведомления</string>
-    <string name="ob_notif_body">Нужны для датчика света и предупреждений о застое данных.</string>
+    <string name="ob_notif_body">Нужны для датчика света и предупр��ждений о застое данных.</string>
     <string name="ob_battery">Оптимизация батареи</string>
     <string name="ob_battery_body">Выключи её, иначе ежечасная синхронизация будет убита.</string>
     <string name="ob_autostart">Автозапуск</string>
@@ -298,7 +300,7 @@
     <string name="tgb_last_none">Записей пока нет.</string>
     <string name="tgb_phases_none">Фазы: не измерялись</string>
     <string name="nt_down_title">Веспиан был остановлен системой</string>
-    <string name="nt_down_text">Фоновая работа была заморожена %1$d минут, ответы �� Telegram приходили с опозданием. Разрешите автозапуск и работу в фоне для Веспиана в системных настройках батареи.</string>
+    <string name="nt_down_text">Фоновая работа была заморожена %1$d минут, ответы в Telegram приходили с опозданием. Разрешите автозапуск и работу в фоне для Веспиана в системных настройках батареи.</string>
     <string name="save">Сохранить</string>
     <string name="saved">Сохранено</string>
     <string name="settings_group_app">Приложение</string>
@@ -356,7 +358,7 @@
     <string name="tgb_why_trust_mid">Окно пока широкое. Записано ночей: %1$d, оно продолжает сужаться.</string>
     <string name="tgb_why_trust_low">Данных пока мало, ночей: %1$d. Это грубая прикидка.</string>
     <string name="tgb_why_basis">Построено на %1$d ночах, где окно сна измерено честно, и %2$d ночах, где вы уснули сразу - такие ночи говорят только то, что окно было уже открыто.</string>
-    <string name="tgb_why_anchor">Ночной минимум пульса взят как якорь внутре��них часов в %1$d ночах. Он не зависит от того, во сколько вы решили лечь.</string>
+    <string name="tgb_why_anchor">Ночной минимум пульса взят как якорь внутренних часов в %1$d ночах. Он не зависит от того, во сколько вы решили лечь.</string>
     <string name="tgb_why_behaviour">Поведенческий слой: этот вечер похож примерно на %1$d мин сверх открытого окна, обучен на %2$d ночах. Он решает только то, насколько сильно сегодняшняя ночь влияет на оценку ваших часов. Окно он не двигает.</string>
     <string name="tgb_why_behaviour_wait">Поведенческий слой молчит: %1$d ночей из %2$d. Раньше он ловит случайности и предсказывает хуже, чем ваше собственное среднее.</string>
     <string name="tgb_why_light">Свет учтён как сдвиг часов на %1$d отрезках. Вечерний свет отодвигает часы позже примерно в восемь раз сильнее, чем утренний тянет раньше.</string>
@@ -380,10 +382,13 @@
     <string name="tgb_corr_plan">План на %1$d дн.:</string>
     <string name="tgb_corr_day">День %1$d: окно %2$s - %3$s, примерно %4$d мин сна сверху.</string>
     <string name="tgb_corr_light">Приглушите свет примерно за два часа до окна. Сразу после подъёма - яркий свет.</string>
-    <string name="tgb_corr_free">Без будильника и ��ез нормы часов. Окно - это когда сон приходит сам.</string>
+    <string name="tgb_corr_free">Без будильника и без нормы часов. Окно - это когда сон приходит сам.</string>
 
-    <string name="tg_q_cans">Сколько банок энергетика было вчера?</string>
-    <string name="tg_q_alcohol">Сколько доз алкоголя было вчера?</string>
+    <string name="tg_q_cans">Сколько банок энергетика было перед этой ночью?</string>
+    <string name="tg_q_alcohol">Сколько доз алкоголя было перед этой ночью?</string>
+    <string name="settings_ask">Утренний вопрос</string>
+    <string name="settings_ask_hint">Бот спрашивает про напитки только если за тот день ничего не отмечено. Что нажато днем, переспрашиваться не будет.</string>
+    <string name="settings_ask_row">Спрашивать про напитки утром</string>
     <string name="tg_cans_done">Энергетик: %1$d банок</string>
     <string name="tg_alcohol_done">Алкоголь: %1$d доз</string>
     <string name="tgb_cmd_energy">Ещё одна банка энергетика</string>

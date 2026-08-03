@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardOptions
@@ -27,6 +28,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
@@ -56,6 +59,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
@@ -143,6 +147,10 @@ private fun SettingsScreen(onBack: () -> Unit) {
     var alcoholOn by remember { mutableStateOf(Prefs.alcoholOn(context)) }
     var mgCan by remember { mutableStateOf(Prefs.mgPerCan(context).toString()) }
     var mgCanNote by remember { mutableStateOf<Int?>(null) }
+
+    // The morning drink question in the chat. Same flag the "do not ask again"
+    // button sets, so this is the only way back once it has been pressed.
+    var askDrinks by remember { mutableStateOf(Prefs.askDrinks(context)) }
 
     // About block. Nulls mean "not read yet".
     var svcSince by remember { mutableStateOf<Long?>(null) }
@@ -436,6 +444,31 @@ private fun SettingsScreen(onBack: () -> Unit) {
             // ---- telegram -----------------------------------------------------
 
             Group(stringResource(R.string.settings_group_telegram))
+
+            Section(stringResource(R.string.settings_ask)) {
+                Text(
+                    stringResource(R.string.settings_ask_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        stringResource(R.string.settings_ask_row),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = askDrinks,
+                        onCheckedChange = {
+                            askDrinks = it
+                            Prefs.setAskDrinks(context, it)
+                        },
+                    )
+                }
+            }
 
             Section(stringResource(R.string.settings_telegram)) {
                 Text(
@@ -746,6 +779,9 @@ private fun Group(title: String) {
 
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {
+    // Collapsed by default. Everything open at once turned this screen into one
+    // long wall, and a wall is a screen nobody reads to the end.
+    var open by rememberSaveable(title) { mutableStateOf(false) }
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -755,13 +791,28 @@ private fun Section(title: String, content: @Composable () -> Unit) {
         ),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                title.uppercase(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(10.dp))
-            content()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { open = !open },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    title.uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(
+                    if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (open) {
+                Spacer(Modifier.height(10.dp))
+                content()
+            }
         }
     }
 }

@@ -144,7 +144,9 @@
     <string name="tg_mood_done">Wellbeing: %1$s</string>
     <string name="tg_mugs_done">Coffee: %1$d mugs</string>
     <string name="tg_q_mood">How did you sleep? 1 wrecked, 5 excellent.</string>
-    <string name="tg_q_mugs">How many mugs of coffee yesterday?</string>
+    <string name="tg_q_mugs">How many mugs of coffee before this night?</string>
+    <string name="tg_ask_off_btn">Do not ask again</string>
+    <string name="tg_ask_off">I will not ask about drinks in the morning any more. The counters in the app and the chat commands still work, and Settings can switch the question back on.</string>
     <string name="tg_mood_1">wrecked</string>
     <string name="tg_mood_2">sluggish</string>
     <string name="tg_mood_3">normal</string>
@@ -382,8 +384,11 @@
     <string name="tgb_corr_light">Dim the light about two hours before the window. Bright light right after waking up.</string>
     <string name="tgb_corr_free">No alarm, no fixed length. The window is where sleep comes on its own.</string>
 
-    <string name="tg_q_cans">How many cans of energy drink yesterday?</string>
-    <string name="tg_q_alcohol">How many drinks yesterday?</string>
+    <string name="tg_q_cans">How many cans of energy drink before this night?</string>
+    <string name="tg_q_alcohol">How many drinks before this night?</string>
+    <string name="settings_ask">Morning question</string>
+    <string name="settings_ask_hint">The bot asks about drinks only when that day has nothing logged. Anything tapped during the day is never asked about again.</string>
+    <string name="settings_ask_row">Ask about drinks in the morning</string>
     <string name="tg_cans_done">Energy drink: %1$d cans</string>
     <string name="tg_alcohol_done">Alcohol: %1$d drinks</string>
     <string name="tgb_cmd_energy">One more can of energy drink</string>

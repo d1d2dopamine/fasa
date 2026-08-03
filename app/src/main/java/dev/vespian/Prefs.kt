@@ -86,6 +86,19 @@ object Prefs {
         prefs(context).edit().putBoolean(KEY_DRINK_ALCOHOL, value).apply()
     }
 
+    // The morning drink question. It exists only to fill a gap: if the day is
+    // already logged by tapping, nothing is asked. Switchable off from the
+    // question itself, because a question that cannot be silenced is a
+    // question that trains the user to ignore the whole chat.
+    private const val KEY_ASK_DRINKS = "ask_drinks"
+
+    fun askDrinks(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ASK_DRINKS, true)
+
+    fun setAskDrinks(context: Context, value: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ASK_DRINKS, value).apply()
+    }
+
     fun mgPerCan(context: Context): Int =
         prefs(context).getInt(KEY_MG_PER_CAN, MG_PER_CAN_DEFAULT)
 
