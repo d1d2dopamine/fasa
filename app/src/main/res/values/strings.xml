@@ -30,7 +30,7 @@
     <string name="now_more">Details</string>
     <string name="now_less">Hide details</string>
     <string name="f_stale">No new sleep data for %1$d days. Tonight is an estimate carried forward, not a measurement, so the window is wider than usual.</string>
-    <string name="f_nap">Daytime sleep today: %1$d min. It spends real sleep pressure, so tonight's window is pushed back by it rather than ignored.</string>
+    <string name="f_nap">Daytime sleep today: %1$d min. It spends real sleep pressure, so tonight\'s window is pushed back by it rather than ignored.</string>
     <string name="f_onset">You will fall asleep around</string>
     <string name="f_wake">Natural wake-up</string>
     <string name="f_reverse">Latest onset for your alarm</string>
@@ -156,7 +156,7 @@
     <string name="tg_saved">Saved</string>
     <string name="tg_mood_done">Wellbeing: %1$s</string>
     <string name="tg_mugs_done">Coffee: %1$d mugs</string>
-    <string name="tg_q_late">Coffee or an energy drink after 4pm today? Nothing is logged for today, and a rough yes here helps tonight's forecast more than a perfectly empty day.</string>
+    <string name="tg_q_late">Coffee or an energy drink after 4pm today? Nothing is logged for today, and a rough yes here helps tonight\'s forecast more than a perfectly empty day.</string>
     <string name="tg_late_yes">Yes</string>
     <string name="tg_late_no">No</string>
     <string name="tg_late_done_yes">Noted: something after 4pm, exact time unknown.</string>
@@ -463,7 +463,7 @@
 
     <!-- History of predictions against measured nights -->
     <string name="f_cal_title">How well this has been working</string>
-    <string name="f_cal_conf">Confidence in tonight's window</string>
+    <string name="f_cal_conf">Confidence in tonight\'s window</string>
     <string name="f_cal_conf_v">%1$d%%</string>
     <string name="f_cal_none">Nothing has been graded yet, so this percentage is still the model’s own opinion of itself. Tonight’s window is saved and checked against your actual sleep tomorrow.</string>
     <string name="f_cal_prelim">Provisional: only %1$d nights have been graded, and it takes about %2$d before the percentage is mostly measurement rather than assumption.</string>
