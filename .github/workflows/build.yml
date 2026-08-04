@@ -12,6 +12,17 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # Fails the build if any text file contains the replacement character,
+      # the diamond with a question mark shown when a letter was mangled by a
+      # wrong encoding. Broken letters only ever appear in the built app, long
+      # after the edit that caused them, so they are caught here instead.
+      - name: Check for broken characters
+        run: |
+          if grep -rlP '\xEF\xBF\xBD' --include='*.kt' --include='*.xml' --include='*.md' . ; then
+            echo "::error::Files above contain a replacement character (mangled letters). Re-save them as UTF-8."
+            exit 1
+          fi
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
@@ -20,6 +31,11 @@ jobs:
       # previous build, but Compose and Kotlin are compiled with optimisations
       # on. Debug builds recompose far slower, which is what made switching
       # screens visibly stall.
+      # Before the APK, because a build that compiles and lies is worse than
+      # one that fails. Cheap enough to run on every push.
+      - name: Unit tests
+        run: gradle testReleaseUnitTest --no-daemon --stacktrace
+
       - name: Build release APK
         run: gradle assembleRelease --no-daemon --stacktrace
 
