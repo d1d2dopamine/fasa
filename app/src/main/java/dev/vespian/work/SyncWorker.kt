@@ -70,6 +70,11 @@ class SyncWorker(context: Context, params: WorkerParameters) :
 
         checkStale(context, now)
 
+        // The same questions Telegram asks, as notifications, for everyone who
+        // never set Telegram up. Silent when it is set up, so nothing is asked
+        // twice.
+        runCatching { Nudge.tick(context) }
+
         // Telegram last: it needs the model to be up to date before it can send
         // an evening forecast, and a network failure here must not cost us the
         // health data we already imported.

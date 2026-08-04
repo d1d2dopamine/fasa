@@ -29,6 +29,7 @@
     <string name="now_wait_why">Следующее — окно, около %1$s.</string>
     <string name="now_more">Подробнее</string>
     <string name="now_less">Свернуть</string>
+    <string name="f_stale">Новых данных о сне нет %1$d дн. Ночь посчитана по старому — это оценка, а не замер, поэтому окно шире обычного.</string>
     <string name="f_nap">Дневной сон сегодня: %1$d мин. Он тратит реальное давление сна, и окно на ночь из-за него сдвинуто позже, а не проигнорировано.</string>
     <string name="f_onset">Заснёшь примерно в</string>
     <string name="f_wake">Естественное пробуждение</string>
@@ -201,6 +202,15 @@
     <string name="nt_light_waiting">Жду первый замер</string>
     <string name="nt_light_value">%1$d люкс · замеров за сутки: %2$d из %3$d</string>
     <string name="nt_light_quiet">Датчик молчит · замеров за сутки: %1$d из %2$d</string>
+    <string name="nt_ask_mood_title">Как спалось?</string>
+    <string name="nt_ask_mood_text">Одно нажатие. На это прогноз опирается сильнее всего.</string>
+    <string name="nt_mood_bad">Плохо</string>
+    <string name="nt_mood_ok">Средне</string>
+    <string name="nt_mood_good">Хорошо</string>
+    <string name="nt_ask_drink_title">Был кофеин сегодня?</string>
+    <string name="nt_ask_drink_text">За сегодня ничего не отмечено. «Да» поставит один напиток в середину дня — это ближе к правде, чем ничего.</string>
+    <string name="nt_ask_yes">Да</string>
+    <string name="nt_ask_no">Нет</string>
     <string name="nt_stale_title">Нет новых данных</string>
     <string name="nt_stale_text">Ничего не приходило %1$d часов. Открой Mi Fitness для синхронизации.</string>
     <string name="ob_title">Настройка Веспиана</string>

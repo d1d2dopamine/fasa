@@ -29,6 +29,7 @@
     <string name="now_wait_why">Next thing is the window, around %1$s.</string>
     <string name="now_more">Details</string>
     <string name="now_less">Hide details</string>
+    <string name="f_stale">No new sleep data for %1$d days. Tonight is an estimate carried forward, not a measurement, so the window is wider than usual.</string>
     <string name="f_nap">Daytime sleep today: %1$d min. It spends real sleep pressure, so tonight's window is pushed back by it rather than ignored.</string>
     <string name="f_onset">You will fall asleep around</string>
     <string name="f_wake">Natural wake-up</string>
@@ -201,6 +202,15 @@
     <string name="nt_light_waiting">Waiting for the first reading</string>
     <string name="nt_light_value">%1$d lux · %2$d of %3$d readings today</string>
     <string name="nt_light_quiet">Sensor quiet · %1$d of %2$d readings today</string>
+    <string name="nt_ask_mood_title">How did you sleep?</string>
+    <string name="nt_ask_mood_text">One tap. This is what the forecast leans on most.</string>
+    <string name="nt_mood_bad">Badly</string>
+    <string name="nt_mood_ok">So-so</string>
+    <string name="nt_mood_good">Well</string>
+    <string name="nt_ask_drink_title">Anything with caffeine today?</string>
+    <string name="nt_ask_drink_text">Nothing is logged for today. Yes puts one drink in the middle of the day, which is closer to the truth than nothing at all.</string>
+    <string name="nt_ask_yes">Yes</string>
+    <string name="nt_ask_no">No</string>
     <string name="nt_stale_title">No new data</string>
     <string name="nt_stale_text">Nothing has arrived for %1$d hours. Open Mi Fitness to sync.</string>
     <string name="ob_title">Set up Vespian</string>

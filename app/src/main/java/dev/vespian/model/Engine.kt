@@ -80,7 +80,24 @@ object Engine {
     // 9: untrusted light readings (covered sensor, missing window) are no
     // longer scored, so every stored fit was built on evidence that partly did
     // not exist and has to be thrown away.
-    const val MODEL_VERSION = 9
+    const val MODEL_VERSION = 10
+
+    /**
+     * How many logged days it takes before a typical day means anything.
+     *
+     * Below this the median is noise, and the honest fallback for an unlogged
+     * day is the old zero: no claim at all rather than a confident wrong one.
+     */
+    private const val GAP_MIN_LOGGED = 5
+
+    /**
+     * How much wider a night is scored when its drinks were guessed.
+     *
+     * Not a free parameter to tune: it only has to be big enough that a guessed
+     * day cannot outvote a measured one, and small enough that a person who logs
+     * once a week still gets a model that learns.
+     */
+    private const val GAP_WIDEN = 1.6
     const val KEY_MODEL_VERSION = "model_version"
 
     // ---- caches ----------------------------------------------------------
@@ -136,6 +153,28 @@ object Engine {
         // carries and the filter fits.
         val caffeineByDate = answers.associate {
             it.dateKey to ((it.mugs ?: 0) * mgPerMugOnce + (it.cans ?: 0) * mgPerCanOnce)
+        }
+
+        // What a normal day looks like for this person, in milligrams.
+        //
+        // Missing days used to be read as zero caffeine, which is the one
+        // reading that is almost certainly wrong. Nobody logs for a week
+        // straight, and someone who drinks coffee every day did not stop drinking
+        // it on the days they forgot the app. Scored as zero, those nights told
+        // the model "no drink and still late", and the only place left to put
+        // that lateness was the body clock. Weeks of silence could therefore
+        // push the whole estimate later than the person actually is.
+        //
+        // The person's own median day is a far better guess than zero, and the
+        // night it is used on is scored with a wider likelihood so a guess can
+        // never speak as loudly as a measurement.
+        val loggedDays = answers
+            .map { (it.mugs ?: 0) * mgPerMugOnce + (it.cans ?: 0) * mgPerCanOnce }
+            .sorted()
+        val typicalCaffeine = when {
+            loggedDays.size < GAP_MIN_LOGGED -> 0.0
+            loggedDays.size % 2 == 1 -> loggedDays[loggedDays.size / 2]
+            else -> (loggedDays[loggedDays.size / 2 - 1] + loggedDays[loggedDays.size / 2]) / 2.0
         }
 
         // Alcohol stays a separate count. It works on a different mechanism
@@ -285,14 +324,41 @@ object Engine {
                 // DSPS a long daytime sleep still counts, so length decides, not clock.
                 if (end - start < 2.0) continue
 
+                // Nights missing from the record between the last stored one
+                // and this one: the band was off, the phone was dead, the week
+                // was bad. The clock kept drifting through them unobserved, so
+                // the cloud is walked forward across the hole before this night
+                // is scored against it.
+                //
+                // The previous wake up is also no longer usable as the start of
+                // pressure: it belongs to a night days ago, and treating it as
+                // last night's would have the model believe in a person who was
+                // awake for sixty hours. So the gap night is scored the way the
+                // very first night is, with a guessed wake up and a wide
+                // likelihood, instead of poisoning the fit with arithmetic that
+                // cannot be true.
+                val missedDays = previousEnd?.let { floor((start - it) / 24.0) } ?: 0.0
+                if (missedDays >= 1.0) f.advanceDays(missedDays)
+                val afterGap = missedDays >= 1.0
+
                 // The very first night has no measured previous wake up. Inventing
                 // one and then trusting it is how a model talks itself into a wrong
                 // phase on day one, so that night gets a much wider likelihood.
-                val known = previousEnd
+                val known = if (afterGap) null else previousEnd
                 val wokeAt = known ?: (start - 16.0)
-                val sigmaScale = if (known == null) 3.0 else 1.0
 
-                val caffeine = caffeineByDate[night.dateKey] ?: 0.0
+                // A day that was never logged at all, as opposed to a day
+                // answered with "nothing". The difference matters: one is a
+                // guess and one is a measurement.
+                val loggedDrinks = caffeineByDate.containsKey(night.dateKey) ||
+                    dosesByDate.containsKey(night.dateKey)
+                val caffeine = caffeineByDate[night.dateKey]
+                    ?: (if (loggedDrinks) 0.0 else typicalCaffeine)
+
+                val sigmaScale = when {
+                    known == null -> 3.0
+                    else -> 1.0
+                } * (if (loggedDrinks) 1.0 else GAP_WIDEN)
                 val alcohol = alcoholByDate[night.dateKey] ?: 0.0
                 // Null on every night logged before the app kept times, which
                 // is what tells the filter to fall back to the daily total.

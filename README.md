@@ -108,12 +108,24 @@ app/src/main/java/dev/vespian/
 
 Known gaps, in the order they are worth closing:
 
-- The confidence percentage is derived from the width of the band, not
-  calibrated against the hit rate the app already records.
-- No automated tests. The model math is only ever checked by living with it.
-- Drinks are asked as a count per day, without the time they were consumed.
 - SpO2 is imported and stored but not yet used by the model.
-- Naps shorter than two hours are ignored entirely.
+- Only the arithmetic under the forecast has tests. The database, the importer
+  and the screens are still checked by living with them.
+- The behavioural layer needs thirty nights before it says anything at all.
+
+Closed since the last release, listed because the README claimed otherwise for a
+while:
+
+- The confidence percentage is now calibrated against the hit rate the app
+  records, instead of being read off the width of the band.
+- Drinks carry the hour they were drunk, backdated with one tap, and the model
+  fits the times rather than a daily total.
+- Daytime sleep is recorded and spends sleep pressure instead of being discarded.
+- Missing days are treated as missing rather than as days with no caffeine.
+- Every question the Telegram bot asks is also asked as a notification with
+  buttons, so the bot is optional.
+
+Before handing a build to anybody else, work through `docs/BETA.md`.
 
 ## Not a medical device
 

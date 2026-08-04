@@ -464,6 +464,10 @@ private fun TodayTab(refresh: Int, onChanged: () -> Unit) {
     // Minutes of daytime sleep today. Shown because a person who napped and
     // then sees a later window deserves to know which of the two is the reason.
     var napMinutes by remember { mutableIntStateOf(0) }
+    // Whole days since the band last reported a night. Missing days no longer
+    // break the model, but the person still deserves to be told that tonight is
+    // carried forward rather than measured.
+    var staleDays by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(refresh) {
         failed = false
@@ -484,6 +488,13 @@ private fun TodayTab(refresh: Int, onChanged: () -> Unit) {
             Math.round(Engine.load(context).debtBandMinutes().median).toInt()
         }.getOrNull()
         UiCache.debt = debt
+        staleDays = runCatching {
+            withContext(Dispatchers.IO) {
+                val last = Db.get(context).nights().lastSleepEnd() ?: 0L
+                if (last <= 0L) 0
+                else ((System.currentTimeMillis() - last) / 86_400_000L).toInt()
+            }
+        }.getOrDefault(0)
         napMinutes = runCatching {
             withContext(Dispatchers.IO) {
                 Db.get(context).naps()
@@ -685,6 +696,15 @@ private fun TodayTab(refresh: Int, onChanged: () -> Unit) {
             Icon(Icons.Filled.Alarm, contentDescription = null)
             Spacer(Modifier.size(8.dp))
             Text(stringResource(R.string.btn_alarm))
+        }
+    }
+
+    if (staleDays >= 2) {
+        SectionCard {
+            Text(
+                stringResource(R.string.f_stale, staleDays),
+                style = MaterialTheme.typography.bodyMedium,
+            )
         }
     }
 

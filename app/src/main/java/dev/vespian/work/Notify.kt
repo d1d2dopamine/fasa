@@ -25,6 +25,8 @@ object Notify {
     const val ID_SERVICE = 1
     const val ID_STALE = 2
     const val ID_DOWN = 3
+    const val ID_ASK_MOOD = 4
+    const val ID_ASK_DRINK = 5
 
     fun ensureChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -101,6 +103,98 @@ object Notify {
             .build()
         try {
             NotificationManagerCompat.from(context).notify(ID_DOWN, notification)
+        } catch (_: SecurityException) {
+        }
+    }
+
+    /**
+     * A button in the shade, wired to [Reply].
+     *
+     * Request codes have to differ per button or Android hands every button the
+     * same intent, which is a bug that looks like the user tapping the wrong
+     * thing.
+     */
+    private fun replyAction(
+        context: Context,
+        code: Int,
+        action: String,
+        label: String,
+        extras: (Intent) -> Unit,
+    ): NotificationCompat.Action {
+        val intent = Intent(context, Reply::class.java).setAction(action).also(extras)
+        val pending = PendingIntent.getBroadcast(
+            context,
+            code,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        return NotificationCompat.Action.Builder(0, label, pending).build()
+    }
+
+    /**
+     * How did you sleep, answerable without unlocking anything.
+     *
+     * Three buttons, not five: Android hides the rest, and this exists precisely
+     * for the mornings when opening an app is not going to happen. Bad, normal
+     * and good are written as one, three and five so an answer given here means
+     * the same number as an answer given in the app.
+     */
+    fun askMood(context: Context) {
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return
+        val notification = NotificationCompat.Builder(context, CH_ALERT)
+            .setSmallIcon(R.drawable.ic_stat_vespian)
+            .setContentTitle(context.getString(R.string.nt_ask_mood_title))
+            .setContentText(context.getString(R.string.nt_ask_mood_text))
+            .setContentIntent(openApp(context))
+            .setAutoCancel(true)
+            .addAction(
+                replyAction(context, 101, Reply.ACTION_MOOD, context.getString(R.string.nt_mood_bad)) {
+                    it.putExtra(Reply.EXTRA_MOOD, 1)
+                }
+            )
+            .addAction(
+                replyAction(context, 102, Reply.ACTION_MOOD, context.getString(R.string.nt_mood_ok)) {
+                    it.putExtra(Reply.EXTRA_MOOD, 3)
+                }
+            )
+            .addAction(
+                replyAction(context, 103, Reply.ACTION_MOOD, context.getString(R.string.nt_mood_good)) {
+                    it.putExtra(Reply.EXTRA_MOOD, 5)
+                }
+            )
+            .build()
+        try {
+            NotificationManagerCompat.from(context).notify(ID_ASK_MOOD, notification)
+        } catch (_: SecurityException) {
+        }
+    }
+
+    /** Did you drink anything today. Yes backdates one drink, no closes the day. */
+    fun askDrink(context: Context) {
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return
+        val notification = NotificationCompat.Builder(context, CH_ALERT)
+            .setSmallIcon(R.drawable.ic_stat_vespian)
+            .setContentTitle(context.getString(R.string.nt_ask_drink_title))
+            .setContentText(context.getString(R.string.nt_ask_drink_text))
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText(context.getString(R.string.nt_ask_drink_text))
+            )
+            .setContentIntent(openApp(context))
+            .setAutoCancel(true)
+            .addAction(
+                replyAction(context, 111, Reply.ACTION_DRINK, context.getString(R.string.nt_ask_yes)) {
+                    it.putExtra(Reply.EXTRA_YES, true)
+                }
+            )
+            .addAction(
+                replyAction(context, 112, Reply.ACTION_DRINK, context.getString(R.string.nt_ask_no)) {
+                    it.putExtra(Reply.EXTRA_YES, false)
+                }
+            )
+            .build()
+        try {
+            NotificationManagerCompat.from(context).notify(ID_ASK_DRINK, notification)
         } catch (_: SecurityException) {
         }
     }

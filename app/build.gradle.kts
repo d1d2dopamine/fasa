@@ -123,4 +123,9 @@ dependencies {
 
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+
+    // Plain JVM tests for the arithmetic under the forecast. No Android, no
+    // emulator, no device: they run in a couple of seconds on every push, which
+    // is the only kind of test that actually keeps getting run.
+    testImplementation("junit:junit:4.13.2")
 }

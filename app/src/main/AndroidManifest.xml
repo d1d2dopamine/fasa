@@ -92,6 +92,12 @@
                 android:resource="@xml/widget_forecast_info" />
         </receiver>
 
+        <!-- Answers tapped from a notification. Not exported: the only sender
+             is this app's own notification. -->
+        <receiver
+            android:name=".work.Reply"
+            android:exported="false" />
+
         <!-- Fires every fifteen minutes and restarts the service if the
              heartbeat has gone stale. Not exported: only our own alarm. -->
         <receiver
