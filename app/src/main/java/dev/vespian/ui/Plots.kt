@@ -172,6 +172,91 @@ fun NightsChart(
     }
 }
 
+/**
+ * Heart rate over a chosen period.
+ *
+ * The period is cut into equal slices and every slice becomes one point: the
+ * average of the readings inside it, with the lowest to highest of that slice
+ * drawn as a band behind the line. A day and three months therefore look the
+ * same amount of busy, and a slice the band measured nothing in is a gap in the
+ * line rather than a line dropped to zero.
+ */
+@Composable
+fun HrChart(
+    avg: List<Double?>,
+    low: List<Double?>,
+    high: List<Double?>,
+    lineColor: Color,
+    bandColor: Color,
+    gridColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier = modifier) {
+        val present = avg.indices.filter { avg[it] != null }
+        if (present.isEmpty()) return@Canvas
+
+        val values = mutableListOf<Double>()
+        avg.filterNotNull().forEach { values.add(it) }
+        low.filterNotNull().forEach { values.add(it) }
+        high.filterNotNull().forEach { values.add(it) }
+        val lo = values.min() - 2.0
+        val hi = values.max() + 2.0
+        val span = max(hi - lo, 1.0)
+
+        for (i in 0..3) {
+            val y = size.height * i / 3f
+            drawLine(gridColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+        }
+
+        val slots = max(avg.size, 1)
+        fun px(i: Int): Float =
+            if (slots == 1) size.width / 2f else size.width * i / (slots - 1).toFloat()
+
+        fun py(v: Double): Float =
+            size.height - (((v - lo) / span) * size.height).toFloat()
+
+        // The spread first, so the line sits on top of its own band.
+        present.forEach { i ->
+            val l = low.getOrNull(i)
+            val h = high.getOrNull(i)
+            if (l == null || h == null) return@forEach
+            val top = py(h)
+            val bottom = py(l)
+            val w = max(size.width / slots.toFloat() * 0.7f, 2f)
+            drawRect(
+                color = bandColor,
+                topLeft = Offset(px(i) - w / 2f, top),
+                size = Size(w, max(bottom - top, 1.5f)),
+            )
+        }
+
+        // One stroke per unbroken run of measured slices. Joining across a gap
+        // would invent a heart rate for hours the band was off the wrist.
+        var run = Path()
+        var started = false
+        var last = -2
+        present.forEach { i ->
+            val v = avg[i] ?: return@forEach
+            if (!started || i != last + 1) {
+                if (started) drawPath(run, color = lineColor, style = Stroke(width = 3.5f))
+                run = Path()
+                run.moveTo(px(i), py(v))
+                started = true
+            } else {
+                run.lineTo(px(i), py(v))
+            }
+            last = i
+        }
+        if (started) drawPath(run, color = lineColor, style = Stroke(width = 3.5f))
+
+        // A single measured slice draws no line at all, so mark it as a point.
+        if (present.size == 1) {
+            val i = present.first()
+            avg[i]?.let { drawCircle(lineColor, radius = 5f, center = Offset(px(i), py(it))) }
+        }
+    }
+}
+
 // Light over one day, one bar per hour. The scale is compressed the same way
 // the model compresses it, so a bar is drawn by how much that hour could move
 // the clock, not by the raw number of lux.

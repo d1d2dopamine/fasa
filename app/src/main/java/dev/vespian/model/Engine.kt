@@ -4,8 +4,10 @@ import android.content.Context
 import dev.vespian.Prefs
 import dev.vespian.db.Db
 import dev.vespian.db.Forced
+import dev.vespian.db.LightSample
 import dev.vespian.db.Meta
 import dev.vespian.db.ModelState
+import dev.vespian.db.Sip
 import dev.vespian.work.Screen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -34,6 +36,9 @@ object Engine {
 
     // A light log shorter than this carries no useful phase information.
     private const val LIGHT_MIN_SAMPLES = 2
+
+    // The hour a logging day starts, matching the bot's own day boundary.
+    private const val DAY_START_H = 4L
 
     /**
      * Worst case trust in a fitted clock anchor.
@@ -72,7 +77,10 @@ object Engine {
     // 7 behavioural layer weighs how much each night says about the body clock
     // 8 caffeine strength and clearance are personal parameters instead of
     //   population constants, and alcohol is scored on its own
-    const val MODEL_VERSION = 8
+    // 9: untrusted light readings (covered sensor, missing window) are no
+    // longer scored, so every stored fit was built on evidence that partly did
+    // not exist and has to be thrown away.
+    const val MODEL_VERSION = 9
     const val KEY_MODEL_VERSION = "model_version"
 
     // ---- caches ----------------------------------------------------------
@@ -134,6 +142,47 @@ object Engine {
         // and mixing it into milligrams of caffeine would be a lie.
         val alcoholByDate = answers.associate { it.dateKey to (it.alcohol ?: 0).toDouble() }
 
+        // The same caffeine again, but with the hours it was actually drunk.
+        //
+        // This is what the timed log is for. The counts above can only say
+        // "three cups somewhere in that day"; these rows say when, and when is
+        // the whole question: caffeine at nine in the morning is gone by
+        // bedtime and caffeine at six is not. Where a night has these it is
+        // fitted from them, and where it does not the count still works.
+        val sipRows = withContext(Dispatchers.IO) {
+            val first = nights.firstOrNull()?.sleepStart
+                ?: (System.currentTimeMillis() - 7L * 86_400_000L)
+            runCatching { db.sips().between(first - 86_400_000L, System.currentTimeMillis() + 1) }
+                .getOrDefault(emptyList())
+        }
+        val dosesByDate = HashMap<String, MutableList<Physics.Dose>>()
+        for (sip in sipRows) {
+            val mg = when (sip.kind) {
+                Sip.KIND_COFFEE -> mgPerMugOnce
+                Sip.KIND_CAN -> mgPerCanOnce
+                else -> 0.0
+            }
+            if (mg <= 0.0) continue
+            dosesByDate.getOrPut(Drinks.dayKey(sip.at)) { ArrayList() }
+                .add(Physics.Dose(hourOf(sip.at, offset), mg, sip.slackMinutes))
+        }
+
+        // Daytime sleep, as plain hour pairs. Read once and sliced per night.
+        //
+        // A nap is never scored as evidence about the body clock. It is only
+        // ever a discharge: pressure falls while it lasts, exactly as it does at
+        // night, and the gate is not allowed to open inside it. Without this a
+        // long afternoon sleep looked like a body that should have wanted bed at
+        // midnight, and the model had nowhere to put the mismatch except into
+        // phase, where it does not belong.
+        val napHours = withContext(Dispatchers.IO) {
+            val first = nights.firstOrNull()?.sleepStart
+                ?: (System.currentTimeMillis() - 7L * 86_400_000L)
+            runCatching { db.naps().between(first - 86_400_000L, System.currentTimeMillis() + 1) }
+                .getOrDefault(emptyList())
+                .map { doubleArrayOf(hourOf(it.start, offset), hourOf(it.end, offset)) }
+        }
+
         // The morning wellbeing answer, kept apart from the mugs because it is
         // optional and often missing. Where it exists it is evidence about how
         // much pressure the night failed to discharge.
@@ -152,10 +201,18 @@ object Engine {
 
         // Everything the light sensor recorded over the span the nights cover.
         // One query, sliced in memory afterwards.
+        //
+        // Only trusted readings are kept. A phone in a pocket reads darkness at
+        // noon and a window where the sensor said nothing reads darkness too;
+        // both are stored on purpose so the log stays honest, but feeding them
+        // to the clock model as real darkness would move the phase estimate on
+        // evidence that does not exist. The rows are still in the database and
+        // still in the export, they simply are not scored.
         val lightRows = withContext(Dispatchers.IO) {
             val first = nights.firstOrNull()?.sleepStart ?: (System.currentTimeMillis() - 7L * 86_400_000L)
             runCatching { db.light().between(first - 86_400_000L, System.currentTimeMillis()) }
                 .getOrDefault(emptyList())
+                .filter { it.kind == LightSample.KIND_OK }
         }
 
         // Every heart rate reading of every day, not only the ones inside a
@@ -237,6 +294,15 @@ object Engine {
 
                 val caffeine = caffeineByDate[night.dateKey] ?: 0.0
                 val alcohol = alcoholByDate[night.dateKey] ?: 0.0
+                // Null on every night logged before the app kept times, which
+                // is what tells the filter to fall back to the daily total.
+                val doses = dosesByDate[night.dateKey]
+                // Only the naps that happened between getting up and this
+                // night. Anything outside that stretch has already been paid
+                // for by an earlier night.
+                val naps = napHours
+                    .filter { it[0] >= wokeAt && it[1] <= start }
+                    .takeIf { it.isNotEmpty() }
 
                 // A hand typed night has no screen event behind it and its sleep
                 // start already contains an assumed latency, so it stays a plain
@@ -293,7 +359,7 @@ object Engine {
                     screenMinutes = screenLit,
                 )
                 if (known != null) {
-                    val gap = (start - f.gateMedian(wokeAt, caffeine)) * 60.0
+                    val gap = (start - f.gateMedian(wokeAt, caffeine, doses, naps)) * 60.0
                     if (gap >= 0.0 && gap <= Behaviour.MAX_GAP_MIN) {
                         gapRows.add(evening)
                         gapValues.add(gap)
@@ -306,6 +372,8 @@ object Engine {
                     mood = moodByDate[night.dateKey],
                     onsetScale = Behaviour.widenFor(behaviourFit, evening),
                     alcoholDoses = alcohol,
+                    doses = doses,
+                    naps = naps,
                 )
                 previousEnd = end
                 previousDuration = end - start
@@ -417,26 +485,148 @@ object Engine {
 
     // ---- inputs ----------------------------------------------------------
 
-    // Caffeine still circulating, based on today's answer.
-    // Drinks are assumed spread over the morning, centred at 11:00 local.
+    // Caffeine still circulating right now.
     //
     // Coffee and energy drinks are added together here, in milligrams, because
     // that is the only form the body reads. The decay to this moment uses the
     // population half life; each hypothesis then re-decays it with its own
     // clearance while it walks the evening forward, which is where the
     // personal figure actually matters.
+    //
+    // Each drink is decayed from its own hour. This matters more than any other
+    // input the person can type: the same cup is irrelevant in the morning and
+    // is most of the reason the night starts at three when it lands at eight in
+    // the evening. A drink whose time was only remembered later carries its
+    // uncertainty with it and is spread across the window it might have been in
+    // rather than pinned to a minute it probably was not.
+    //
+    // Days logged before the app recorded times fall back to the old
+    // assumption: everything at eleven in the morning. That is a poor guess,
+    // but it is the guess those days were logged under, and quietly re-reading
+    // them as something else would corrupt history rather than improve it.
+    /**
+     * Today's and yesterday's drinks, as timed doses.
+     *
+     * The same window and the same fallback as [caffeineNow], so the number on
+     * the screen and the number inside the model can never disagree about what
+     * was drunk. A day logged only as a count becomes one dose in the middle of
+     * the morning with four hours of slack, which is exactly how much that
+     * count is worth.
+     */
+    /**
+     * Daytime sleep that happened after [sinceHour], as hour pairs.
+     *
+     * Naps before the last wake up are deliberately left out: whatever they
+     * discharged was discharged before the night that has since been slept, and
+     * counting them again would subtract the same pressure twice.
+     */
+    private suspend fun napsSince(
+        context: Context,
+        offset: Double,
+        sinceHour: Double,
+    ): List<DoubleArray> {
+        val db = Db.get(context)
+        val from = millisOf(sinceHour, offset)
+        val rows = withContext(Dispatchers.IO) {
+            runCatching { db.naps().between(from, System.currentTimeMillis() + 1) }
+                .getOrDefault(emptyList())
+        }
+        return rows.map { doubleArrayOf(hourOf(it.start, offset), hourOf(it.end, offset)) }
+    }
+
+    private suspend fun dosesRecent(context: Context, offset: Double): List<Physics.Dose> {
+        val db = Db.get(context)
+        val mgPerMug = Prefs.mgPerMug(context).toDouble()
+        val mgPerCan = Prefs.mgPerCan(context).toDouble()
+        val zone = ZoneId.systemDefault()
+        val from = ZonedDateTime.of(LocalDate.now().minusDays(1), LocalTime.MIDNIGHT, zone)
+            .toInstant().toEpochMilli()
+        val until = System.currentTimeMillis()
+        val timed = withContext(Dispatchers.IO) { db.sips().between(from, until + 1) }
+
+        val out = ArrayList<Physics.Dose>()
+        for (sip in timed) {
+            val mg = when (sip.kind) {
+                Sip.KIND_COFFEE -> mgPerMug
+                Sip.KIND_CAN -> mgPerCan
+                else -> 0.0
+            }
+            if (mg <= 0.0) continue
+            out.add(Physics.Dose(hourOf(sip.at, offset), mg, sip.slackMinutes.coerceAtLeast(0)))
+        }
+
+        // Counts and times both written by the same taps would double every cup.
+        if (timed.any { it.at >= dayStartMs() }) return out
+
+        val answer = withContext(Dispatchers.IO) {
+            db.answers().byDate(LocalDate.now().toString())
+        } ?: return out
+        val mg = (answer.mugs ?: 0) * mgPerMug + (answer.cans ?: 0) * mgPerCan
+        if (mg <= 0.0) return out
+        val centre = ZonedDateTime.of(LocalDate.now(), LocalTime.of(11, 0), zone)
+        out.add(Physics.Dose(hourOf(centre.toInstant().toEpochMilli(), offset), mg, 240))
+        return out
+    }
+
     private suspend fun caffeineNow(context: Context, offset: Double): Double {
         val db = Db.get(context)
         val today = LocalDate.now().toString()
-        val answer = withContext(Dispatchers.IO) { db.answers().byDate(today) } ?: return 0.0
-        val mg = (answer.mugs ?: 0) * Prefs.mgPerMug(context).toDouble() +
-            (answer.cans ?: 0) * Prefs.mgPerCan(context).toDouble()
-        if (mg <= 0.0) return 0.0
-
-        val centre = ZonedDateTime.of(LocalDate.now(), LocalTime.of(11, 0), ZoneId.systemDefault())
-        val drankAt = hourOf(centre.toInstant().toEpochMilli(), offset)
+        val mgPerMug = Prefs.mgPerMug(context).toDouble()
+        val mgPerCan = Prefs.mgPerCan(context).toDouble()
         val nowHour = hourOf(System.currentTimeMillis(), offset)
-        return Physics.caffeine(mg, nowHour - drankAt)
+
+        // Caffeine lasts well past midnight, so the window has to reach back
+        // into yesterday. A cup at ten last night is still doing something at
+        // two in the morning, and that is exactly the case worth getting right.
+        val zone = ZoneId.systemDefault()
+        val from = ZonedDateTime.of(LocalDate.now().minusDays(1), LocalTime.MIDNIGHT, zone)
+            .toInstant().toEpochMilli()
+        val until = System.currentTimeMillis()
+        val timed = withContext(Dispatchers.IO) { db.sips().between(from, until + 1) }
+
+        var mgLeft = 0.0
+        for (sip in timed) {
+            val mg = when (sip.kind) {
+                Sip.KIND_COFFEE -> mgPerMug
+                Sip.KIND_CAN -> mgPerCan
+                else -> 0.0
+            }
+            if (mg <= 0.0) continue
+            val drankAt = hourOf(sip.at, offset)
+            val slack = sip.slackMinutes.coerceAtLeast(0) / 60.0
+            mgLeft += Physics.caffeineSpread(mg, nowHour - drankAt, slack)
+        }
+
+        // Whether today was logged with times at all. If it was, the counted
+        // answer must not be added on top: the taps wrote both, and adding them
+        // would double every cup.
+        val timedToday = timed.any { it.at >= dayStartMs() }
+        if (timedToday) return mgLeft
+
+        val answer = withContext(Dispatchers.IO) { db.answers().byDate(today) } ?: return mgLeft
+        val mg = (answer.mugs ?: 0) * mgPerMug + (answer.cans ?: 0) * mgPerCan
+        if (mg <= 0.0) return mgLeft
+
+        val centre = ZonedDateTime.of(LocalDate.now(), LocalTime.of(11, 0), zone)
+        val drankAt = hourOf(centre.toInstant().toEpochMilli(), offset)
+        // Four hours of slack, because "some time in the morning" is what this
+        // number actually means.
+        return mgLeft + Physics.caffeineSpread(mg, nowHour - drankAt, 4.0)
+    }
+
+    // Where the logging day begins, in milliseconds.
+    //
+    // Four in the morning, not midnight, matching the day the rest of the app
+    // counts by. For a delayed phase this is not a detail: a cup at one in the
+    // morning belongs to the evening it was drunk in, not to the calendar date
+    // the clock had just rolled over to.
+    private fun dayStartMs(): Long {
+        val zone = ZoneId.systemDefault()
+        val day = ZonedDateTime.now(zone).minusHours(DAY_START_H).toLocalDate()
+        return ZonedDateTime.of(day, LocalTime.MIDNIGHT, zone)
+            .plusHours(DAY_START_H)
+            .toInstant()
+            .toEpochMilli()
     }
 
     // Standard drinks logged today. Kept separate from caffeine on purpose:
@@ -505,14 +695,26 @@ object Engine {
         val nights = withContext(Dispatchers.IO) { db.nights().count() }
         val wokeAt = lastWakeHour(context, offset)
         val caffeine = caffeineNow(context, offset)
+        // Tonight's drinks with their hours. The single number above is kept
+        // for the screen, which shows a current load; the model gets the times.
+        val doses = dosesRecent(context, offset)
+        // Any daytime sleep since getting up. This is the difference between a
+        // forecast that insists on midnight and one that admits an hour on the
+        // sofa at five has pushed the whole evening back.
+        val naps = napsSince(context, offset, wokeAt)
         val alcohol = alcoholToday(context)
         val alarm = alarmRaw(context) ?: "-"
+
+        // How the published windows have actually been doing. Read before the
+        // cache key is built, because a graded night changes the answer.
+        val score = Calib.score(context)
 
         // Quarter hour buckets. Nothing in the answer moves faster than that,
         // and it caps a recompute at four per hour instead of one per redraw.
         val bucket = floor(hourOf(System.currentTimeMillis(), offset) * 4.0).toLong()
         val key = "$filterStamp|$nights|$alarm|$bucket|${offset}|" +
-            "${(caffeine / 5.0).toInt()}|${alcohol.toInt()}"
+            "${(caffeine / 5.0).toInt()}|${alcohol.toInt()}|" +
+            "${score.graded}|${score.hits}|${naps.size}"
 
         val hit = forecastCache
         if (hit != null && key == forecastKey) return hit
@@ -524,9 +726,15 @@ object Engine {
                 nights = nights,
                 targetWake = null,
                 alcoholDoses = alcohol,
+                doses = doses,
+                naps = naps,
             )
             val target = targetWakeHour(context, offset, base.onset.median)
-            if (target == null) base else base.copy(reverseAlarm = filter.reverseBand(target))
+            val full =
+                if (target == null) base else base.copy(reverseAlarm = filter.reverseBand(target))
+            // Last step on purpose: the model produces its best guess, then the
+            // record decides how wide that guess is allowed to look.
+            Calib.apply(full, score)
         }
 
         forecastCache = result

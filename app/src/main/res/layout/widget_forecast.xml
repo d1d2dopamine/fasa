@@ -6,44 +6,63 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@drawable/widget_bg"
-    android:padding="14dp">
+    android:padding="10dp">
 
+    <!--
+        Every line is match_parent and auto sized. A widget is whatever size the
+        launcher feels like giving it, so a fixed 30sp time was simply cut off on
+        a narrow cell, and wrap_content hid the clipping instead of preventing
+        it. Auto sizing shrinks the text until it fits the cell it was given.
+    -->
     <TextView
         android:id="@+id/widget_title"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="@string/widget_title"
         android:textColor="#97A6BA"
-        android:textSize="11sp"
-        android:letterSpacing="0.08"
+        android:textSize="10sp"
+        android:letterSpacing="0.06"
+        android:ellipsize="end"
         android:maxLines="1" />
 
     <TextView
         android:id="@+id/widget_value"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="2dp"
         android:textColor="#E4EAF2"
-        android:textSize="30sp"
         android:maxLines="1"
+        android:gravity="center_vertical|start"
+        android:autoSizeTextType="uniform"
+        android:autoSizeMinTextSize="14sp"
+        android:autoSizeMaxTextSize="26sp"
+        android:autoSizeStepGranularity="1sp"
         android:text="@string/widget_none" />
 
     <TextView
         android:id="@+id/widget_range"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
         android:textColor="#4FD1C5"
-        android:textSize="13sp"
-        android:maxLines="1" />
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:autoSizeTextType="uniform"
+        android:autoSizeMinTextSize="9sp"
+        android:autoSizeMaxTextSize="12sp"
+        android:autoSizeStepGranularity="1sp" />
 
     <TextView
         android:id="@+id/widget_gate"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
+        android:layout_marginTop="3dp"
         android:textColor="#97A6BA"
-        android:textSize="12sp"
-        android:maxLines="1" />
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:autoSizeTextType="uniform"
+        android:autoSizeMinTextSize="9sp"
+        android:autoSizeMaxTextSize="11sp"
+        android:autoSizeStepGranularity="1sp" />
 
 </LinearLayout>

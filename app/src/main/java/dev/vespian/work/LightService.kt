@@ -29,7 +29,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -70,8 +69,18 @@ class LightService : Service(), SensorEventListener {
     private var screenMs = 0L
 
     private var lastLux: Float? = null
+
+    // Readings written today, counted in the database rather than in memory.
+    //
+    // A counter held in a field resets to zero every time the system kills the
+    // service and the watchdog brings it back, and it stops moving altogether
+    // on a window the sensor stayed silent through. Both look identical from the
+    // shade: the number freezes and there is no way to tell whether sampling
+    // stopped or only the display did. Counting rows answers the real question,
+    // and showing trusted next to total says out loud how many of them were the
+    // phone lying face down.
     private var samples = 0
-    private var samplesDay: LocalDate? = null
+    private var samplesTotal = 0
     private var botStarted = false
 
     // Screen state. Off is the moment the phone was put down, which is the only
@@ -125,7 +134,11 @@ class LightService : Service(), SensorEventListener {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // Android 14 kills the process if this does not happen within ten
         // seconds of the start request, so it is the very first thing we do.
-        startForeground(Notify.ID_SERVICE, Notify.service(this, lastLux, samples))
+        startForeground(Notify.ID_SERVICE, Notify.service(this, lastLux, samples, samplesTotal))
+
+        // The counter is read back from the database on every start, so a
+        // restart continues today's count instead of beginning again at zero.
+        scope.launch { recount() }
 
         startBotLoop()
 
@@ -257,11 +270,7 @@ class LightService : Service(), SensorEventListener {
             else -> LightSample.KIND_OK
         }
 
-        if (lux != null) {
-            lastLux = lux
-            bumpCounter(now)
-            refreshNotification()
-        }
+        if (lux != null) lastLux = lux
 
         val row = LightSample(
             at = now,
@@ -271,7 +280,26 @@ class LightService : Service(), SensorEventListener {
             screenMs = on.coerceAtLeast(0L),
             brightness = brightness(),
         )
-        scope.launch { Db.get(applicationContext).light().put(row) }
+        scope.launch {
+            runCatching { Db.get(applicationContext).light().put(row) }
+            // Every window updates the shade, including a silent one. A number
+            // that stops moving must mean sampling stopped, nothing else.
+            recount()
+        }
+    }
+
+    /** Today's row counts, straight from the table, then redraw the shade. */
+    private suspend fun recount() {
+        val dao = runCatching { Db.get(applicationContext).light() }.getOrNull() ?: return
+        val from = LocalDate.now(ZoneId.systemDefault())
+            .atStartOfDay(ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
+        val trusted = runCatching { dao.countTrustedSince(from) }.getOrNull() ?: return
+        val total = runCatching { dao.countSince(from) }.getOrNull() ?: return
+        samples = trusted
+        samplesTotal = total
+        handler.post { refreshNotification() }
     }
 
     // The user's brightness setting, 0..255. Not the light the screen actually
@@ -281,21 +309,11 @@ class LightService : Service(), SensorEventListener {
         Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS)
     }.getOrDefault(-1)
 
-    // The notification says "today", so the counter has to mean today.
-    private fun bumpCounter(now: Long) {
-        val day = Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()).toLocalDate()
-        if (samplesDay != day) {
-            samplesDay = day
-            samples = 0
-        }
-        samples += 1
-    }
-
     private fun refreshNotification() {
         if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) return
         try {
             NotificationManagerCompat.from(this)
-                .notify(Notify.ID_SERVICE, Notify.service(this, lastLux, samples))
+                .notify(Notify.ID_SERVICE, Notify.service(this, lastLux, samples, samplesTotal))
         } catch (_: SecurityException) {
         }
     }

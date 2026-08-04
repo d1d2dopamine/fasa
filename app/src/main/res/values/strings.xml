@@ -6,6 +6,7 @@
     <string name="tab_drift">Drift</string>
     <string name="tab_model">Model</string>
     <string name="tab_data">Data</string>
+    <string name="tab_pulse">Pulse</string>
 
     <string name="btn_permissions">Grant permissions</string>
     <string name="btn_sync">Sync now</string>
@@ -18,6 +19,17 @@
     <string name="f_cold">Cold start. No real nights yet, so these are priors from population data. The bands will narrow as your own nights arrive.</string>
 
     <string name="f_gate">Sleep gate opens</string>
+    <string name="now_sleep">Go to bed now</string>
+    <string name="now_sleep_why">The window is open. It closes around %1$s.</string>
+    <string name="now_dim">Start dimming the lights</string>
+    <string name="now_dim_why">The window opens around %1$s.</string>
+    <string name="now_answer">Answer one question below</string>
+    <string name="now_answer_why">Nothing is logged for today, so tonight is a guess.</string>
+    <string name="now_wait">Nothing to do</string>
+    <string name="now_wait_why">Next thing is the window, around %1$s.</string>
+    <string name="now_more">Details</string>
+    <string name="now_less">Hide details</string>
+    <string name="f_nap">Daytime sleep today: %1$d min. It spends real sleep pressure, so tonight's window is pushed back by it rather than ignored.</string>
     <string name="f_onset">You will fall asleep around</string>
     <string name="f_wake">Natural wake-up</string>
     <string name="f_reverse">Latest onset for your alarm</string>
@@ -143,6 +155,11 @@
     <string name="tg_saved">Saved</string>
     <string name="tg_mood_done">Wellbeing: %1$s</string>
     <string name="tg_mugs_done">Coffee: %1$d mugs</string>
+    <string name="tg_q_late">Coffee or an energy drink after 4pm today? Nothing is logged for today, and a rough yes here helps tonight's forecast more than a perfectly empty day.</string>
+    <string name="tg_late_yes">Yes</string>
+    <string name="tg_late_no">No</string>
+    <string name="tg_late_done_yes">Noted: something after 4pm, exact time unknown.</string>
+    <string name="tg_late_done_no">Noted: nothing after 4pm.</string>
     <string name="tg_q_mood">How did you sleep? 1 wrecked, 5 excellent.</string>
     <string name="tg_q_mugs">How many mugs of coffee before this night?</string>
     <string name="tg_ask_off_btn">Do not ask again</string>
@@ -182,7 +199,8 @@
     <string name="ch_alert_desc">Warns when the band stops sending data.</string>
     <string name="nt_light_title">Vespian is measuring light</string>
     <string name="nt_light_waiting">Waiting for the first reading</string>
-    <string name="nt_light_value">%1$d lux, %2$d readings today</string>
+    <string name="nt_light_value">%1$d lux · %2$d of %3$d readings today</string>
+    <string name="nt_light_quiet">Sensor quiet · %1$d of %2$d readings today</string>
     <string name="nt_stale_title">No new data</string>
     <string name="nt_stale_text">Nothing has arrived for %1$d hours. Open Mi Fitness to sync.</string>
     <string name="ob_title">Set up Vespian</string>
@@ -340,6 +358,21 @@
     <string name="log_coffee_n">Coffee today: %1$d</string>
     <string name="log_undo">Undo</string>
     <string name="log_reset">Erase</string>
+    <string name="log_when">When was it?</string>
+    <string name="log_when_now">Just now</string>
+    <string name="log_when_30">30 min ago</string>
+    <string name="log_when_60">An hour ago</string>
+    <string name="log_when_120">2+ hours ago</string>
+    <string name="log_when_at">Recorded at %1$s.</string>
+    <string name="log_when_about">Recorded around %1$s, give or take %2$d min. Spread over that window instead of pinned to a minute it probably was not.</string>
+    <string name="log_late">Coffee after 4pm today?</string>
+    <string name="log_late_hint">One tap. A rough yes is worth more than an empty day.</string>
+    <string name="log_late_yes">Yes, there was</string>
+    <string name="log_late_no">No</string>
+    <string name="log_habit">Usually the first one lands around %1$s.</string>
+    <string name="log_habit_yes">Yes, around %1$s</string>
+    <string name="log_habit_no">Not today</string>
+    <string name="log_habit_hint">A guess from %1$d days of your own log, not a measurement. One tap fixes it.</string>
     <string name="log_mood">How do you feel?</string>
     <string name="log_mood_set">Recorded: %1$s</string>
     <string name="log_mood_none">Not recorded today</string>
@@ -419,6 +452,16 @@
     <string name="f_why">Why this forecast</string>
 
     <!-- History of predictions against measured nights -->
+    <string name="f_cal_title">How well this has been working</string>
+    <string name="f_cal_conf">Confidence in tonight's window</string>
+    <string name="f_cal_conf_v">%1$d%%</string>
+    <string name="f_cal_none">Nothing has been graded yet, so this percentage is still the model’s own opinion of itself. Tonight’s window is saved and checked against your actual sleep tomorrow.</string>
+    <string name="f_cal_prelim">Provisional: only %1$d nights have been graded, and it takes about %2$d before the percentage is mostly measurement rather than assumption.</string>
+    <string name="f_cal_wide">Sleep landed outside the window more often than promised, so the window has been widened until it stops overstating itself.</string>
+    <string name="f_cal_tight">Sleep landed inside the window more often than promised, so the window has been narrowed to say something more useful.</string>
+    <string name="f_cal_ok">The width of the window matches how often it has actually been right.</string>
+    <string name="f_cal_hint">A published window is a promise to contain the night about %1$d%% of the time. This card is the app marking its own homework: the percentage above is what the record says, not what the model would like to believe.</string>
+
     <string name="f_hist">Last two weeks</string>
     <string name="f_hist_empty">No measured nights yet. The chart fills in as nights arrive.</string>
     <string name="f_hist_wait">%1$d nights measured. None of them had a saved forecast yet, so nothing is scored. Grading starts with tonight.</string>
@@ -439,6 +482,23 @@
     <string name="d_light_hint">Bar height is how much that hour could move your clock, not raw lux. Light saturates: 300 lux is already half the effect of 3000.</string>
 
     <!-- Home screen widget -->
+    <string name="p_title">Heart rate</string>
+    <string name="p_1d">24 h</string>
+    <string name="p_7d">7 d</string>
+    <string name="p_30d">30 d</string>
+    <string name="p_90d">90 d</string>
+    <string name="p_none">No heart rate readings for this period. They arrive with each Health Connect sync.</string>
+    <string name="p_low">Lowest</string>
+    <string name="p_avg">Average</string>
+    <string name="p_high">Highest</string>
+    <string name="p_bpm">%1$d bpm</string>
+    <string name="p_count">Readings</string>
+    <string name="p_count_value">%1$d</string>
+    <string name="p_span">Period</string>
+    <string name="p_hint">Every point is an average over a slice of the period, so a long range is smoother rather than noisier. The shaded band is the lowest to highest reading inside each slice.</string>
+    <string name="p_nadir">Clock low point</string>
+    <string name="p_nadir_none">not enough readings</string>
+
     <string name="widget_title">ASLEEP AROUND</string>
     <string name="widget_none">No forecast</string>
     <string name="widget_range">%1$s to %2$s</string>

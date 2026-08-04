@@ -5,18 +5,21 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
+import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import dev.vespian.db.Db
 import dev.vespian.db.HrSample
 import dev.vespian.db.Meta
+import dev.vespian.db.Nap
 import dev.vespian.db.Night
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.Date
 import java.util.Locale
+import kotlin.reflect.KClass
 
 object HealthRepo {
 
@@ -39,6 +42,14 @@ object HealthRepo {
     private const val MIN_NIGHT_MINUTES = 120L
 
     /**
+     * A nap has to be at least this long to be worth storing.
+     *
+     * Below twenty minutes there is nothing to discharge and plenty to get
+     * wrong: bands routinely report a few minutes of "sleep" for sitting still.
+     */
+    private const val MIN_NAP_MINUTES = 20L
+
+    /**
      * How far back to re-read on every sync.
      *
      * Mi Fitness writes nights retroactively, sometimes a day or more late.
@@ -56,6 +67,17 @@ object HealthRepo {
      * daily fit can use.
      */
     private const val HR_BIN_MS = 5L * 60L * 1000L
+
+    /**
+     * How much of the past to read in one go.
+     *
+     * A first sync with the history permission covers a year. A year of beats
+     * held in memory at once is tens of megabytes of objects, which on a phone
+     * is how a background worker gets killed halfway and imports nothing. A
+     * week at a time is bounded, and each week is written before the next one
+     * is read, so an interrupted sync still leaves what it managed to import.
+     */
+    private const val HR_CHUNK_DAYS = 7L
 
     private const val CURSOR_KEY = "hc_cursor"
     private val dateFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
@@ -170,17 +192,28 @@ object HealthRepo {
         }
 
         return try {
-            val sessions = client.readRecords(
-                ReadRecordsRequest(
-                    recordType = SleepSessionRecord::class,
-                    timeRangeFilter = TimeRangeFilter.between(from, now),
-                )
-            ).records
+            val sessions = readPaged(client, SleepSessionRecord::class, from, now)
 
             var added = 0
             for (s in sessions) {
                 val minutes = ChronoUnit.MINUTES.between(s.startTime, s.endTime)
-                if (minutes < MIN_NIGHT_MINUTES) continue
+                if (minutes < MIN_NIGHT_MINUTES) {
+                    // Not a night, but not rubbish either. A daytime hour of
+                    // sleep discharges real pressure, and until now it was
+                    // dropped on the floor, which left the model blaming the
+                    // body clock for a late night the afternoon had caused.
+                    if (minutes >= MIN_NAP_MINUTES) {
+                        runCatching {
+                            db.naps().put(
+                                Nap(
+                                    start = s.startTime.toEpochMilli(),
+                                    end = s.endTime.toEpochMilli(),
+                                )
+                            )
+                        }
+                    }
+                    continue
+                }
 
                 var deep = 0L
                 var rem = 0L
@@ -208,9 +241,8 @@ object HealthRepo {
                 val window = TimeRangeFilter.between(s.startTime, s.endTime)
 
                 val hrSamples = runCatching {
-                    client.readRecords(
-                        ReadRecordsRequest(HeartRateRecord::class, timeRangeFilter = window)
-                    ).records.flatMap { it.samples }
+                    readPaged(client, HeartRateRecord::class, s.startTime, s.endTime)
+                        .flatMap { it.samples }
                 }.getOrDefault(emptyList())
 
                 // A single stray beat is not a resting heart rate. The low
@@ -257,25 +289,29 @@ object HealthRepo {
             // rhythm rises, and an amplitude it has to guess turns into a phase
             // it gets wrong. These readings are what make the anchor steadier
             // than the single lowest beat it replaced.
-            val hrAll = runCatching {
-                client.readRecords(
-                    ReadRecordsRequest(
-                        HeartRateRecord::class,
-                        timeRangeFilter = TimeRangeFilter.between(from, now),
-                    )
-                ).records.flatMap { it.samples }
-            }.getOrDefault(emptyList())
+            // One week at a time, each week binned and written before the next
+            // is read. Peak memory is a week no matter how far back the history
+            // goes.
+            var cursor = from
+            while (cursor.isBefore(now)) {
+                val chunkEnd = minOf(cursor.plus(HR_CHUNK_DAYS, ChronoUnit.DAYS), now)
+                val chunk = runCatching {
+                    readPaged(client, HeartRateRecord::class, cursor, chunkEnd)
+                        .flatMap { it.samples }
+                }.getOrDefault(emptyList())
 
-            if (hrAll.isNotEmpty()) {
-                val binned = hrAll
-                    .groupBy { it.time.toEpochMilli() / HR_BIN_MS }
-                    .map { (bin, group) ->
-                        HrSample(
-                            at = bin * HR_BIN_MS,
-                            bpm = group.map { s -> s.beatsPerMinute }.average().toInt(),
-                        )
-                    }
-                db.hr().put(binned)
+                if (chunk.isNotEmpty()) {
+                    val binned = chunk
+                        .groupBy { it.time.toEpochMilli() / HR_BIN_MS }
+                        .map { (bin, group) ->
+                            HrSample(
+                                at = bin * HR_BIN_MS,
+                                bpm = group.map { s -> s.beatsPerMinute }.average().toInt(),
+                            )
+                        }
+                    db.hr().put(binned)
+                }
+                cursor = chunkEnd
             }
 
             db.meta().put(Meta(CURSOR_KEY, now.toEpochMilli().toString()))
@@ -283,5 +319,36 @@ object HealthRepo {
         } catch (e: Exception) {
             Result.Failed(e.message ?: e.javaClass.simpleName)
         }
+    }
+
+    /**
+     * Every record in a range, not just the first page.
+     *
+     * Health Connect answers a read with a page and a token for the rest. A
+     * single call therefore returns a capped number of records and silently
+     * drops the remainder, which on a busy range means missing nights and a
+     * heart rate curve with holes in it. Following the token to the end is the
+     * only way to be sure the range was actually read.
+     */
+    private suspend fun <T : Record> readPaged(
+        client: HealthConnectClient,
+        recordType: KClass<T>,
+        from: Instant,
+        to: Instant,
+    ): List<T> {
+        val out = ArrayList<T>()
+        var token: String? = null
+        do {
+            val page = client.readRecords(
+                ReadRecordsRequest(
+                    recordType = recordType,
+                    timeRangeFilter = TimeRangeFilter.between(from, to),
+                    pageToken = token,
+                )
+            )
+            out.addAll(page.records)
+            token = page.pageToken
+        } while (token != null)
+        return out
     }
 }

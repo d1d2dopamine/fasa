@@ -80,6 +80,12 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+
+        // Every source and resource file in this project is UTF-8. Said out
+        // loud, because a build machine with a different default locale reads
+        // Cyrillic bytes as its own encoding and silently turns letters it
+        // cannot map into the replacement diamond.
+        encoding = "UTF-8"
     }
 
     kotlinOptions {

@@ -9,7 +9,9 @@ import dev.vespian.db.HrSample
 import dev.vespian.db.LightSample
 import dev.vespian.db.Meta
 import dev.vespian.db.ModelState
+import dev.vespian.db.Nap
 import dev.vespian.db.Night
+import dev.vespian.db.Sip
 import dev.vespian.model.Engine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -49,6 +51,12 @@ object Backup {
         val light: Int,
         val meta: Int,
         val model: Boolean,
+        // Trailing and defaulted so a backup written before drinks carried
+        // times still restores, and reports honestly that it had none.
+        val sips: Int = 0,
+        // Same reasoning: files written before daytime sleep was recorded have
+        // none, and saying zero is the truth about them.
+        val naps: Int = 0,
     )
 
     class BadFile(message: String) : Exception(message)
@@ -65,7 +73,7 @@ object Backup {
         root.put("format", FORMAT)
         root.put("backup_version", FORMAT_VERSION)
         root.put("app_version", BuildConfig.VERSION_NAME)
-        root.put("schema_version", 4)
+        root.put("schema_version", 6)
         root.put("created_at_utc", Instant.ofEpochMilli(now).toString())
         root.put("time_zone", ZoneId.systemDefault().id)
         root.put(
@@ -107,6 +115,33 @@ object Backup {
             answers.put(o)
         }
         root.put("answers", answers)
+
+        // Individual drinks with the hour they were drunk. The daily counts
+        // above say how much; these say when, which is what decides whether a
+        // dose was still working at bedtime.
+        val sips = JSONArray()
+        for (s in db.sips().between(0L, now)) {
+            val o = JSONObject()
+            o.put("at", s.at)
+            o.put("loggedAt", s.loggedAt)
+            o.put("kind", s.kind)
+            o.put("slackMinutes", s.slackMinutes)
+            sips.put(o)
+        }
+        root.put("sips", sips)
+
+        // Daytime sleep. Not nights and never scored as nights, but they spend
+        // pressure, so a restore without them would quietly change the meaning
+        // of every evening that followed one.
+        val naps = JSONArray()
+        for (n in db.naps().between(0L, now)) {
+            val o = JSONObject()
+            o.put("start", n.start)
+            o.put("end", n.end)
+            o.put("source", n.source)
+            naps.put(o)
+        }
+        root.put("naps", naps)
 
         // Heart rate and light are tens of thousands of rows. Named fields
         // would triple the file for no gain, so both are fixed length arrays
@@ -225,6 +260,43 @@ object Backup {
             )
         }
 
+        // Absent in files written before drinks carried times. An empty list is
+        // the truthful reading of that: those days were logged as counts only.
+        val sips = root.optJSONArray("sips") ?: JSONArray()
+        var sipCount = 0
+        for (i in 0 until sips.length()) {
+            val o = sips.optJSONObject(i) ?: continue
+            val at = o.optLong("at")
+            if (at <= 0L) continue
+            db.sips().put(
+                Sip(
+                    at = at,
+                    loggedAt = o.optLong("loggedAt", at),
+                    kind = o.optInt("kind", Sip.KIND_COFFEE),
+                    slackMinutes = o.optInt("slackMinutes", 0),
+                )
+            )
+            sipCount++
+        }
+
+        // Absent in older files, which simply had nowhere to put a nap.
+        val naps = root.optJSONArray("naps") ?: JSONArray()
+        var napCount = 0
+        for (i in 0 until naps.length()) {
+            val o = naps.optJSONObject(i) ?: continue
+            val start = o.optLong("start")
+            val end = o.optLong("end")
+            if (start <= 0L || end <= start) continue
+            db.naps().put(
+                Nap(
+                    start = start,
+                    end = end,
+                    source = o.optString("source", "mi"),
+                )
+            )
+            napCount++
+        }
+
         val hr = root.optJSONArray("hr") ?: JSONArray()
         val hrRows = ArrayList<HrSample>(hr.length())
         for (i in 0 until hr.length()) {
@@ -301,6 +373,8 @@ object Backup {
             light = light.length(),
             meta = metaCount,
             model = model != null,
+            sips = sipCount,
+            naps = napCount,
         )
     }
 

@@ -130,6 +130,88 @@ object Physics {
     fun caffeine(mg: Double, dt: Double, halfLife: Double = CAF_HALF_LIFE): Double =
         if (dt < 0.0) 0.0 else mg * 2.0.pow(-dt / halfLife)
 
+    /**
+     * One caffeinated drink, at the hour it happened.
+     *
+     * @property hour absolute hours on the same scale as everything else in the
+     *   model, not an hour of the clock.
+     * @property mg how much caffeine it carried.
+     * @property slackMinutes how vaguely the hour is known. A drink logged by
+     *   tapping the button carries zero; one backdated from memory or guessed
+     *   from a habit carries the width of that guess.
+     */
+    class Dose(
+        val hour: Double,
+        val mg: Double,
+        val slackMinutes: Int = 0,
+    )
+
+    /**
+     * Caffeine still circulating at [atHour] from a whole day of drinks.
+     *
+     * The old way of doing this was to add up the day's milligrams and decay
+     * the total from one assumed moment. That is wrong in the direction that
+     * matters: a cup at eight in the morning and a cup at eight in the evening
+     * average out to an afternoon that never happened, and the evening cup,
+     * the only one still doing anything at bedtime, gets its effect halved.
+     * Doses are decayed one by one instead. Anything dated later than [atHour]
+     * contributes nothing, so a partly logged day needs no special case.
+     */
+    fun caffeineFrom(
+        doses: List<Dose>,
+        atHour: Double,
+        halfLife: Double = CAF_HALF_LIFE,
+    ): Double {
+        var total = 0.0
+        for (d in doses) {
+            total += caffeineSpread(d.mg, atHour - d.hour, d.slackMinutes / 60.0, halfLife)
+        }
+        return total
+    }
+
+    /**
+     * Caffeine still circulating from a dose whose time is only roughly known.
+     *
+     * A drink remembered two hours after the fact has no single hour attached
+     * to it, and picking one anyway would hand the model a false certainty it
+     * cannot see through. Instead the dose is spread evenly across the window
+     * it might have happened in and the remaining amount is averaged over that
+     * window.
+     *
+     * The averaging is not cosmetic. Decay is a curve, so the average of the
+     * curve is not the curve of the average: a dose that might have been taken
+     * anywhere in a three hour window leaves more caffeine on average than one
+     * pinned to the middle of that window. Spreading it therefore errs on the
+     * side of admitting caffeine might still be present, which is the safe
+     * direction for a forecast about falling asleep.
+     *
+     * @param slack how wrong the timestamp could be, in hours either way. Zero
+     *   gives exactly [caffeine].
+     */
+    fun caffeineSpread(
+        mg: Double,
+        dt: Double,
+        slack: Double,
+        halfLife: Double = CAF_HALF_LIFE,
+    ): Double {
+        if (mg <= 0.0) return 0.0
+        if (slack <= 0.0) return caffeine(mg, dt, halfLife)
+
+        // Nine slices across the window. More slices do not change the answer
+        // by anything a person could notice, and the cost is paid on every
+        // forecast.
+        val slices = 9
+        var total = 0.0
+        for (i in 0 until slices) {
+            // Slice centres, evenly spaced from one edge of the window to the
+            // other. A later assumed drink means less time to decay, so this
+            // walks dt from dt + slack down to dt - slack.
+            val offset = slack * (1.0 - 2.0 * (i + 0.5) / slices)
+            total += caffeine(mg, dt + offset, halfLife)
+        }
+        return total / slices
+    }
+
     // How much of one night's recovery this hypothesis thinks was lost to
     // drink. Zero doses cost nothing; the effect saturates rather than growing
     // without limit.
@@ -245,6 +327,15 @@ data class Band(
 ) {
     val width: Double get() = high - low
 
+    /**
+     * The model's own estimate of how sure it is, from the spread of the
+     * surviving hypotheses alone.
+     *
+     * This is a statement about the model, not about reality: it says the
+     * hypotheses agree, not that they are right. Everything shown to the user
+     * goes through [Calib], which corrects this against how often the published
+     * window actually contained the night.
+     */
     val confidence: Double get() = (1.0 - width / MAX_WIDTH).coerceIn(0.0, 1.0)
 
     companion object {
@@ -260,4 +351,9 @@ data class Forecast(
     val driftPerDay: Double,
     val nights: Int,
     val caffeineNow: Double,
+    /**
+     * The app's measured track record, attached once the forecast has been
+     * calibrated against it. Null means it has not been through [Calib] yet.
+     */
+    val calib: Calib.Score? = null,
 )

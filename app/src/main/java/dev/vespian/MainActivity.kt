@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Tune
@@ -77,11 +78,14 @@ import androidx.compose.ui.unit.dp
 import dev.vespian.db.Answer
 import dev.vespian.db.Db
 import dev.vespian.db.Forced
+import dev.vespian.db.Sip
 import dev.vespian.db.Meta
 import dev.vespian.health.HealthRepo
 import dev.vespian.export.Export
 import dev.vespian.model.Band
+import dev.vespian.model.Calib
 import dev.vespian.model.Delay
+import dev.vespian.model.Drinks
 import dev.vespian.model.Engine
 import dev.vespian.model.Filter
 import dev.vespian.model.Forecast
@@ -91,6 +95,7 @@ import dev.vespian.tg.Commands
 import dev.vespian.ui.DayRing
 import dev.vespian.ui.DriftChart
 import dev.vespian.ui.Histogram
+import dev.vespian.ui.HrChart
 import dev.vespian.ui.LightDay
 import dev.vespian.ui.NightsChart
 import dev.vespian.ui.VespianTheme
@@ -131,7 +136,7 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
-private enum class Tab { TODAY, DRIFT, MODEL, DATA, SETTINGS }
+private enum class Tab { TODAY, DRIFT, PULSE, MODEL, DATA, SETTINGS }
 
 /**
  * What every tab had on screen the last time it was open.
@@ -155,6 +160,8 @@ private object UiCache {
     var lightSamples: Int = 0
     var lightPeak: Float = 0f
     var lightBright: Int = 0
+    var pulseDays: Int = 1
+    var pulse: Pulse? = null
 }
 
 /** Nights drawn in the history chart. Two weeks, as asked. */
@@ -194,6 +201,7 @@ fun AppScreen() {
             NavigationBar {
                 NavItem(tab, Tab.TODAY, Icons.Filled.Bedtime, R.string.tab_today) { tab = it }
                 NavItem(tab, Tab.DRIFT, Icons.Filled.Timeline, R.string.tab_drift) { tab = it }
+                NavItem(tab, Tab.PULSE, Icons.Filled.Favorite, R.string.tab_pulse) { tab = it }
                 NavItem(tab, Tab.MODEL, Icons.Filled.Science, R.string.tab_model) { tab = it }
                 NavItem(tab, Tab.DATA, Icons.Filled.MonitorHeart, R.string.tab_data) { tab = it }
                 NavItem(tab, Tab.SETTINGS, Icons.Filled.Tune, R.string.tab_settings) { tab = it }
@@ -210,6 +218,7 @@ fun AppScreen() {
             when (tab) {
                 Tab.TODAY -> TodayTab(refresh) { refresh++ }
                 Tab.DRIFT -> DriftTab(refresh)
+                Tab.PULSE -> PulseTab(refresh)
                 Tab.MODEL -> ModelTab(refresh) { refresh++ }
                 Tab.DATA -> DataTab(refresh) { refresh++ }
                 Tab.SETTINGS -> SettingsScreen(onBack = null)
@@ -302,8 +311,12 @@ private fun InfoRow(label: String, value: String) {
 
 // A band never prints a number for its own confidence. Below half certainty a
 // single time would be a lie, so only the range is shown.
+//
+// The certainty passed in is the calibrated one, measured against how often the
+// published window actually contained the night. A band that merely agrees with
+// itself does not earn the right to print a single time.
 @Composable
-private fun BandRow(color: Color, labelRes: Int, band: Band) {
+private fun BandRow(color: Color, labelRes: Int, band: Band, confidence: Double) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -322,11 +335,11 @@ private fun BandRow(color: Color, labelRes: Int, band: Band) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Label(stringResource(labelRes))
             Text(
-                text = if (band.confidence >= 0.5) hhmm(band.median)
+                text = if (confidence >= 0.5) hhmm(band.median)
                 else stringResource(R.string.f_range, hhmm(band.low), hhmm(band.high)),
                 style = MaterialTheme.typography.headlineSmall,
             )
-            if (band.confidence >= 0.5) {
+            if (confidence >= 0.5) {
                 Text(
                     text = stringResource(R.string.f_range, hhmm(band.low), hhmm(band.high)),
                     style = MaterialTheme.typography.bodyMedium,
@@ -403,9 +416,12 @@ private fun WhyCard(f: Forecast, latency: Double?, obs: IntArray?) {
             ),
             style = body,
         )
+        // Measured certainty, not the band's opinion of itself. How much to
+        // trust the window is exactly the question the record answers.
+        val certainty = f.calib?.confidence(f.onset) ?: f.onset.confidence
         val trust = when {
-            f.onset.confidence >= 0.66 -> R.string.tgb_why_trust_high
-            f.onset.confidence >= 0.33 -> R.string.tgb_why_trust_mid
+            certainty >= 0.66 -> R.string.tgb_why_trust_high
+            certainty >= 0.33 -> R.string.tgb_why_trust_mid
             else -> R.string.tgb_why_trust_low
         }
         Text(stringResource(trust, f.nights), style = body, color = dim)
@@ -438,6 +454,16 @@ private fun TodayTab(refresh: Int, onChanged: () -> Unit) {
     var latency by remember { mutableStateOf(UiCache.latency) }
     var obs by remember { mutableStateOf(UiCache.obs) }
     var failed by remember { mutableStateOf(false) }
+    // Whether today is still a blank day, which is the only case where this
+    // screen has anything to ask for.
+    var unanswered by remember { mutableStateOf(false) }
+    // Everything below the first card is reference material. Folded away by
+    // default: a screen that opens with eleven cards is a screen that gets
+    // read once and then scrolled past forever.
+    var details by remember { mutableStateOf(false) }
+    // Minutes of daytime sleep today. Shown because a person who napped and
+    // then sees a later window deserves to know which of the two is the reason.
+    var napMinutes by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(refresh) {
         failed = false
@@ -458,6 +484,16 @@ private fun TodayTab(refresh: Int, onChanged: () -> Unit) {
             Math.round(Engine.load(context).debtBandMinutes().median).toInt()
         }.getOrNull()
         UiCache.debt = debt
+        napMinutes = runCatching {
+            withContext(Dispatchers.IO) {
+                Db.get(context).naps()
+                    .between(Drinks.dayStart(), System.currentTimeMillis() + 1)
+                    .sumOf { it.minutes }
+            }
+        }.getOrDefault(0)
+        unanswered = runCatching {
+            !Drinks.anyToday(context) && !Drinks.settled(context)
+        }.getOrDefault(false)
     }
 
     if (failed && forecast == null) {
@@ -473,14 +509,20 @@ private fun TodayTab(refresh: Int, onChanged: () -> Unit) {
     val onsetColor = MaterialTheme.colorScheme.secondary
     val wakeColor = MaterialTheme.colorScheme.tertiary
 
+    // Every certainty on this screen is the measured one where a measurement
+    // exists. Falling back to the band's own opinion only happens on a forecast
+    // that has not been through the record yet.
+    val score = f.calib
+    fun certainty(band: Band): Double = score?.confidence(band) ?: band.confidence
+
     Spacer(Modifier.height(8.dp))
 
     DayRing(
         nowHour = nowHour(),
         arcs = listOf(
-            RingArc(f.gate.low, f.gate.median, f.gate.high, f.gate.confidence, gateColor, 0.dp),
-            RingArc(f.onset.low, f.onset.median, f.onset.high, f.onset.confidence, onsetColor, 22.dp),
-            RingArc(f.wake.low, f.wake.median, f.wake.high, f.wake.confidence, wakeColor, 44.dp),
+            RingArc(f.gate.low, f.gate.median, f.gate.high, certainty(f.gate), gateColor, 0.dp),
+            RingArc(f.onset.low, f.onset.median, f.onset.high, certainty(f.onset), onsetColor, 22.dp),
+            RingArc(f.wake.low, f.wake.median, f.wake.high, certainty(f.wake), wakeColor, 44.dp),
         ),
         trackColor = MaterialTheme.colorScheme.outlineVariant,
         tickColor = MaterialTheme.colorScheme.outlineVariant,
@@ -493,7 +535,7 @@ private fun TodayTab(refresh: Int, onChanged: () -> Unit) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Label(stringResource(R.string.f_onset))
             Text(
-                text = if (f.onset.confidence >= 0.5) hhmm(f.onset.median)
+                text = if (certainty(f.onset) >= 0.5) hhmm(f.onset.median)
                 else stringResource(R.string.f_range, hhmm(f.onset.low), hhmm(f.onset.high)),
                 style = MaterialTheme.typography.displayLarge,
                 textAlign = TextAlign.Center,
@@ -510,11 +552,65 @@ private fun TodayTab(refresh: Int, onChanged: () -> Unit) {
         }
     }
 
+    // One thing, now.
+    //
+    // The rest of this screen answers questions. This card answers the only
+    // question that gets asked at eleven at night, which is "so what do I do".
+    // It says one thing, it says why in one line, and it is allowed to say that
+    // there is nothing to do, because most hours of most days there is not and
+    // an app that always demands something is an app that gets uninstalled.
+    val nowH = nowHour()
+    val toGate = f.gate.median - nowH
+    val inWindow = nowH >= f.onset.low - 0.25 && nowH <= f.wake.low
     SectionCard {
-        BandRow(gateColor, R.string.f_gate, f.gate)
-        BandRow(onsetColor, R.string.f_onset, f.onset)
-        BandRow(wakeColor, R.string.f_wake, f.wake)
+        val action: Int
+        val why: String
+        when {
+            // Awake inside the window. Nothing else on the screen matters.
+            inWindow -> {
+                action = R.string.now_sleep
+                why = stringResource(R.string.now_sleep_why, hhmm(f.onset.high))
+            }
+            // Close enough that light now still moves tonight.
+            toGate in 0.0..2.0 -> {
+                action = R.string.now_dim
+                why = stringResource(R.string.now_dim_why, hhmm(f.gate.median))
+            }
+            // Hours to go, and today has nothing on it. This is the moment the
+            // one question is cheap to answer, so this is when it is asked for.
+            unanswered -> {
+                action = R.string.now_answer
+                why = stringResource(R.string.now_answer_why)
+            }
+            else -> {
+                action = R.string.now_wait
+                why = stringResource(R.string.now_wait_why, hhmm(f.gate.median))
+            }
+        }
+        Text(
+            stringResource(action),
+            style = MaterialTheme.typography.headlineSmall,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            why,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
+
+    TextButton(onClick = { details = !details }) {
+        Text(stringResource(if (details) R.string.now_less else R.string.now_more))
+    }
+
+    if (details) {
+    SectionCard {
+        BandRow(gateColor, R.string.f_gate, f.gate, certainty(f.gate))
+        BandRow(onsetColor, R.string.f_onset, f.onset, certainty(f.onset))
+        BandRow(wakeColor, R.string.f_wake, f.wake, certainty(f.wake))
+    }
+
+    TrackRecordCard(f)
 
     WhyCard(f, latency, obs)
 
@@ -570,8 +666,14 @@ private fun TodayTab(refresh: Int, onChanged: () -> Unit) {
     LogCard(refresh, onChanged)
 
     SectionCard {
-        if (f.reverseAlarm != null) {
-            BandRow(MaterialTheme.colorScheme.primary, R.string.f_reverse, f.reverseAlarm)
+        val reverse = f.reverseAlarm
+        if (reverse != null) {
+            BandRow(
+                MaterialTheme.colorScheme.primary,
+                R.string.f_reverse,
+                reverse,
+                certainty(reverse),
+            )
         } else {
             Text(
                 stringResource(R.string.f_no_alarm),
@@ -583,6 +685,15 @@ private fun TodayTab(refresh: Int, onChanged: () -> Unit) {
             Icon(Icons.Filled.Alarm, contentDescription = null)
             Spacer(Modifier.size(8.dp))
             Text(stringResource(R.string.btn_alarm))
+        }
+    }
+
+    if (napMinutes > 0) {
+        SectionCard {
+            Text(
+                stringResource(R.string.f_nap, napMinutes),
+                style = MaterialTheme.typography.bodyMedium,
+            )
         }
     }
 
@@ -602,6 +713,7 @@ private fun TodayTab(refresh: Int, onChanged: () -> Unit) {
             }
         }
     }
+    }
 }
 
 // Coffee and wellbeing entered straight in the app. The bot asks the same two
@@ -614,12 +726,20 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
     var cans by remember { mutableIntStateOf(0) }
     var doses by remember { mutableIntStateOf(0) }
     var mood by remember { mutableStateOf<Int?>(null) }
+    // The drink logged by the last tap, so "actually, an hour ago" has
+    // something to point at.
+    var lastSip by remember { mutableStateOf<Sip?>(null) }
     // Switched off by default. A row that is never used is a row that makes
     // the whole card feel like a chore.
     val energyOn = remember { Prefs.energyOn(context) }
     val alcoholOn = remember { Prefs.alcoholOn(context) }
     var forced by remember { mutableStateOf(false) }
     var forcedKey by remember { mutableStateOf("") }
+    // The two fallbacks for a day nobody logged: one question in the evening,
+    // and the habit. At most one of them is ever on screen, because two ways of
+    // asking the same thing is not twice the answers, it is half the trust.
+    var askLate by remember { mutableStateOf(false) }
+    var habit by remember { mutableStateOf<Drinks.Habit?>(null) }
 
     LaunchedEffect(refresh) {
         val a = withContext(Dispatchers.IO) {
@@ -632,6 +752,9 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
         val key = Forced.currentKey(context)
         forcedKey = key
         forced = Forced.has(context, key)
+        val guessed = runCatching { Drinks.habit(context) }.getOrNull()
+        habit = if (guessed != null && Drinks.shouldOfferHabit(context, guessed)) guessed else null
+        askLate = habit == null && Drinks.shouldAskLate(context)
     }
 
     SectionCard {
@@ -643,6 +766,7 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
                 mugs = next
                 scope.launch {
                     saveAnswer(context, next, null)
+                    lastSip = logSip(context, Sip.KIND_COFFEE)
                     onChanged()
                 }
             }) {
@@ -663,6 +787,8 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
                     mugs = next
                     scope.launch {
                         saveAnswer(context, next, null)
+                        dropLastSip(context, Sip.KIND_COFFEE)
+                        lastSip = null
                         onChanged()
                     }
                 }) {
@@ -670,8 +796,10 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
                 }
                 TextButton(onClick = {
                     mugs = 0
+                    lastSip = null
                     scope.launch {
                         clearDrink(context, coffee = true)
+                        clearSipsToday(context, Sip.KIND_COFFEE)
                         onChanged()
                     }
                 }) {
@@ -691,6 +819,7 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
                     cans = next
                     scope.launch {
                         saveAnswer(context, null, null, cans = next)
+                        lastSip = logSip(context, Sip.KIND_CAN)
                         onChanged()
                     }
                 }) {
@@ -709,6 +838,8 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
                         cans = next
                         scope.launch {
                             saveAnswer(context, null, null, cans = next)
+                            dropLastSip(context, Sip.KIND_CAN)
+                            lastSip = null
                             onChanged()
                         }
                     }) {
@@ -716,8 +847,10 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
                     }
                     TextButton(onClick = {
                         cans = 0
+                        lastSip = null
                         scope.launch {
                             clearDrink(context, cans = true)
+                            clearSipsToday(context, Sip.KIND_CAN)
                             onChanged()
                         }
                     }) {
@@ -735,6 +868,7 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
                     doses = next
                     scope.launch {
                         saveAnswer(context, null, null, alcohol = next)
+                        lastSip = logSip(context, Sip.KIND_ALCOHOL)
                         onChanged()
                     }
                 }) {
@@ -759,6 +893,8 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
                         doses = next
                         scope.launch {
                             saveAnswer(context, null, null, alcohol = next)
+                            dropLastSip(context, Sip.KIND_ALCOHOL)
+                            lastSip = null
                             onChanged()
                         }
                     }) {
@@ -766,8 +902,10 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
                     }
                     TextButton(onClick = {
                         doses = 0
+                        lastSip = null
                         scope.launch {
                             clearDrink(context, alcohol = true)
+                            clearSipsToday(context, Sip.KIND_ALCOHOL)
                             onChanged()
                         }
                     }) {
@@ -776,6 +914,144 @@ private fun LogCard(refresh: Int, onChanged: () -> Unit) {
                 }
             }
         }
+        // When it actually happened.
+        //
+        // The tap is the time, and this row is the entire correction interface:
+        // four buttons, one tap, no clock face and no typing. Anything that asks
+        // for a time properly will simply stop being used, and a drink that goes
+        // unlogged is worse for the model than one logged an hour off.
+        //
+        // Only appears after a drink was just logged, and never nags: ignoring
+        // it means "just now", which is true most of the time.
+        val pending = lastSip
+        if (pending != null) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                stringResource(R.string.log_when),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            val agoMinutes = ((pending.loggedAt - pending.at) / 60_000L).toInt()
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                // Label, how long ago, and how vague that answer is. "Two hours
+                // or more" is deliberately the widest: it is the honest shape of
+                // a memory that has already faded.
+                val options = listOf(
+                    Triple(R.string.log_when_now, 0, 0),
+                    Triple(R.string.log_when_30, 30, 15),
+                    Triple(R.string.log_when_60, 60, 20),
+                    Triple(R.string.log_when_120, 150, 60),
+                )
+                for ((labelRes, minutesAgo, slack) in options) {
+                    val chosen = agoMinutes == minutesAgo
+                    TextButton(onClick = {
+                        scope.launch {
+                            lastSip = moveSip(context, pending, minutesAgo, slack)
+                            onChanged()
+                        }
+                    }) {
+                        Text(
+                            stringResource(labelRes),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = if (chosen) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            Text(
+                text = if (pending.slackMinutes <= 0) {
+                    stringResource(R.string.log_when_at, hhmmOf(pending.at))
+                } else {
+                    stringResource(
+                        R.string.log_when_about,
+                        hhmmOf(pending.at),
+                        pending.slackMinutes,
+                    )
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        // Nothing logged today and the usual time has gone past: offer the
+        // habit instead of asking. A guess presented as a guess, with its own
+        // spread as its slack, and one tap to reject it.
+        val guess = habit
+        if (guess != null) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                stringResource(R.string.log_habit, hhmmOf(guess.atToday())),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = {
+                    val next = mugs + 1
+                    mugs = next
+                    habit = null
+                    scope.launch {
+                        saveAnswer(context, next, null)
+                        Drinks.logHabit(context, guess)
+                        onChanged()
+                    }
+                }) {
+                    Text(stringResource(R.string.log_habit_yes, hhmmOf(guess.atToday())))
+                }
+                TextButton(onClick = {
+                    habit = null
+                    scope.launch {
+                        Drinks.markSettled(context)
+                        onChanged()
+                    }
+                }) {
+                    Text(stringResource(R.string.log_habit_no))
+                }
+            }
+            Text(
+                stringResource(R.string.log_habit_hint, guess.days),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        // No habit to lean on yet, so the evening asks the one question whose
+        // answer changes tonight: was there anything after four. Once a day,
+        // and only on a day that is otherwise empty.
+        if (askLate) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                stringResource(R.string.log_late),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = {
+                    val next = mugs + 1
+                    mugs = next
+                    askLate = false
+                    scope.launch {
+                        saveAnswer(context, next, null)
+                        Drinks.logLate(context)
+                        onChanged()
+                    }
+                }) {
+                    Text(stringResource(R.string.log_late_yes))
+                }
+                TextButton(onClick = {
+                    askLate = false
+                    scope.launch {
+                        Drinks.markSettled(context)
+                        onChanged()
+                    }
+                }) {
+                    Text(stringResource(R.string.log_late_no))
+                }
+            }
+            Text(
+                stringResource(R.string.log_late_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
         Spacer(Modifier.height(12.dp))
         Text(
             stringResource(R.string.log_mood),
@@ -880,6 +1156,71 @@ private fun moodRes(value: Int): Int = when (value) {
     3 -> R.string.tg_mood_3
     4 -> R.string.tg_mood_4
     else -> R.string.tg_mood_5
+}
+
+// ---- drinks with times -----------------------------------------------------
+
+// Clock time of a moment, for showing back what was just recorded.
+private fun hhmmOf(millis: Long): String =
+    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(millis))
+
+// Where the logging day starts: four in the morning, the same boundary the bot
+// and the model use. A cup at one in the morning belongs to the evening it was
+// drunk in, not to the date the clock had just rolled over to.
+private fun logDayStart(): Long {
+    val cal = Calendar.getInstance()
+    if (cal.get(Calendar.HOUR_OF_DAY) < 4) cal.add(Calendar.DAY_OF_YEAR, -1)
+    cal.set(Calendar.HOUR_OF_DAY, 4)
+    cal.set(Calendar.MINUTE, 0)
+    cal.set(Calendar.SECOND, 0)
+    cal.set(Calendar.MILLISECOND, 0)
+    return cal.timeInMillis
+}
+
+// One drink, timed by the tap that recorded it. No slack: pressing the button
+// while drinking is the one case where the app does know the minute.
+private suspend fun logSip(context: Context, kind: Int): Sip? =
+    withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val sip = Sip(at = now, loggedAt = now, kind = kind, slackMinutes = 0)
+        val id = runCatching { Db.get(context).sips().put(sip) }.getOrNull()
+            ?: return@withContext null
+        Engine.invalidate()
+        sip.copy(id = id)
+    }
+
+// Move a just logged drink back in time, and record how vague that is.
+//
+// The correction is always measured from when the button was pressed, never
+// from the current time, so tapping "an hour ago" twice cannot walk a drink
+// steadily into the past.
+private suspend fun moveSip(context: Context, sip: Sip, minutesAgo: Int, slack: Int): Sip =
+    withContext(Dispatchers.IO) {
+        val moved = sip.copy(
+            at = sip.loggedAt - minutesAgo * 60_000L,
+            slackMinutes = slack,
+        )
+        runCatching { Db.get(context).sips().update(moved) }
+        Engine.invalidate()
+        Commands.refitSoon(context, force = true)
+        moved
+    }
+
+// Undo pairs with the count: the drink the last tap added is the drink removed.
+private suspend fun dropLastSip(context: Context, kind: Int) {
+    withContext(Dispatchers.IO) {
+        val dao = Db.get(context).sips()
+        runCatching { dao.lastLogged(kind)?.let { dao.delete(it) } }
+        Engine.invalidate()
+    }
+}
+
+private suspend fun clearSipsToday(context: Context, kind: Int) {
+    withContext(Dispatchers.IO) {
+        runCatching { Db.get(context).sips().clearSince(logDayStart(), kind) }
+        Engine.invalidate()
+        Commands.refitSoon(context, force = true)
+    }
 }
 
 // A null argument means "leave that field as it is", so a mug never wipes the
@@ -1088,6 +1429,233 @@ private fun HistoryCard(rows: List<PredLog.Row>?) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/**
+ * How well the window has actually been working.
+ *
+ * The point of this card is that the percentage above it is now checkable. It
+ * states how many nights were graded, how many landed inside the published
+ * window, how far off the middle typically was, and whether the app has widened
+ * or narrowed its windows in response. While there is too little to judge, it
+ * says so instead of showing a confident number.
+ */
+@Composable
+private fun TrackRecordCard(f: Forecast) {
+    val s = f.calib ?: return
+
+    SectionCard {
+        Label(stringResource(R.string.f_cal_title))
+
+        val percent = (s.confidence(f.onset) * 100.0).roundToInt()
+        InfoRow(
+            stringResource(R.string.f_cal_conf),
+            stringResource(R.string.f_cal_conf_v, percent),
+        )
+
+        if (s.graded == 0) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                stringResource(R.string.f_cal_none),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return@SectionCard
+        }
+
+        InfoRow(
+            stringResource(R.string.f_hist_score),
+            stringResource(R.string.f_hist_score_v, s.hits, s.graded),
+        )
+        s.typicalMiss?.let {
+            InfoRow(stringResource(R.string.f_hist_miss), stringResource(R.string.f_hist_miss_v, it))
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        val note = when {
+            !s.measured -> stringResource(R.string.f_cal_prelim, s.graded, Calib.MIN_GRADED)
+            s.direction > 0 -> stringResource(R.string.f_cal_wide)
+            s.direction < 0 -> stringResource(R.string.f_cal_tight)
+            else -> stringResource(R.string.f_cal_ok)
+        }
+        Text(
+            note,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Spacer(Modifier.height(8.dp))
+        Text(
+            stringResource(R.string.f_cal_hint, (Calib.TARGET * 100).roundToInt()),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+// ---- pulse ---------------------------------------------------------------
+
+/**
+ * Points drawn per period.
+ *
+ * The number stays the same for every range on purpose. Ninety days of raw
+ * readings is tens of thousands of points on a screen a few hundred pixels
+ * wide, which draws slowly and reads as noise. Forty eight slices means a day
+ * is shown in half hours and three months in roughly two day steps.
+ */
+private const val PULSE_SLOTS = 48
+
+private const val PULSE_DAY_MS = 24 * HOUR_MS
+
+/** One period of heart rate, already reduced to what the chart can draw. */
+private class Pulse(
+    val avg: List<Double?>,
+    val low: List<Double?>,
+    val high: List<Double?>,
+    val min: Int,
+    val mean: Int,
+    val max: Int,
+    val count: Int,
+)
+
+/**
+ * Reads the period and folds it into slices.
+ *
+ * A slice with no readings stays null rather than becoming a zero, so a day the
+ * band was not worn leaves a hole in the line instead of a dive to the floor.
+ */
+private suspend fun readPulse(context: Context, days: Int): Pulse =
+    withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val from = now - days * PULSE_DAY_MS
+        val rows = runCatching { Db.get(context).hr().between(from, now) }
+            .getOrDefault(emptyList())
+
+        val sum = DoubleArray(PULSE_SLOTS)
+        val seen = IntArray(PULSE_SLOTS)
+        val lo = DoubleArray(PULSE_SLOTS)
+        val hi = DoubleArray(PULSE_SLOTS)
+        val width = ((now - from) / PULSE_SLOTS).coerceAtLeast(1L)
+
+        var total = 0.0
+        var lowest = Double.MAX_VALUE
+        var highest = -Double.MAX_VALUE
+
+        rows.forEach { row ->
+            val bpm = row.bpm.toDouble()
+            val i = ((row.at - from) / width).toInt().coerceIn(0, PULSE_SLOTS - 1)
+            if (seen[i] == 0) {
+                lo[i] = bpm
+                hi[i] = bpm
+            } else {
+                if (bpm < lo[i]) lo[i] = bpm
+                if (bpm > hi[i]) hi[i] = bpm
+            }
+            sum[i] += bpm
+            seen[i]++
+            total += bpm
+            if (bpm < lowest) lowest = bpm
+            if (bpm > highest) highest = bpm
+        }
+
+        val slots = 0 until PULSE_SLOTS
+        Pulse(
+            avg = slots.map { if (seen[it] == 0) null else sum[it] / seen[it] },
+            low = slots.map { if (seen[it] == 0) null else lo[it] },
+            high = slots.map { if (seen[it] == 0) null else hi[it] },
+            min = if (rows.isEmpty()) 0 else lowest.roundToInt(),
+            mean = if (rows.isEmpty()) 0 else (total / rows.size).roundToInt(),
+            max = if (rows.isEmpty()) 0 else highest.roundToInt(),
+            count = rows.size,
+        )
+    }
+
+@Composable
+private fun PulseTab(refresh: Int) {
+    val context = LocalContext.current
+    var days by remember { mutableIntStateOf(UiCache.pulseDays) }
+    var data by remember { mutableStateOf(UiCache.pulse) }
+
+    // Reloads on a range change as well as on a refresh: the chosen range is
+    // the whole question this tab answers.
+    LaunchedEffect(refresh, days) {
+        val fresh = readPulse(context, days)
+        data = fresh
+        UiCache.pulse = fresh
+        UiCache.pulseDays = days
+    }
+
+    Spacer(Modifier.height(8.dp))
+
+    SectionCard {
+        Label(stringResource(R.string.p_title))
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PulseRange(days, 1, R.string.p_1d) { days = it }
+            PulseRange(days, 7, R.string.p_7d) { days = it }
+            PulseRange(days, 30, R.string.p_30d) { days = it }
+            PulseRange(days, 90, R.string.p_90d) { days = it }
+        }
+    }
+
+    val p = data ?: run {
+        Loading()
+        return
+    }
+
+    if (p.count == 0) {
+        SectionCard {
+            Text(
+                stringResource(R.string.p_none),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        return
+    }
+
+    SectionCard {
+        HrChart(
+            avg = p.avg,
+            low = p.low,
+            high = p.high,
+            lineColor = MaterialTheme.colorScheme.primary,
+            bandColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
+            gridColor = MaterialTheme.colorScheme.outlineVariant,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(190.dp),
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        InfoRow(stringResource(R.string.p_low), stringResource(R.string.p_bpm, p.min))
+        InfoRow(stringResource(R.string.p_avg), stringResource(R.string.p_bpm, p.mean))
+        InfoRow(stringResource(R.string.p_high), stringResource(R.string.p_bpm, p.max))
+        InfoRow(stringResource(R.string.p_count), stringResource(R.string.p_count_value, p.count))
+
+        Spacer(Modifier.height(8.dp))
+        Text(
+            stringResource(R.string.p_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun PulseRange(current: Int, target: Int, labelRes: Int, onSelect: (Int) -> Unit) {
+    val pad = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+    if (current == target) {
+        Button(onClick = { onSelect(target) }, contentPadding = pad) {
+            Text(stringResource(labelRes), style = MaterialTheme.typography.labelLarge)
+        }
+    } else {
+        OutlinedButton(onClick = { onSelect(target) }, contentPadding = pad) {
+            Text(stringResource(labelRes), style = MaterialTheme.typography.labelLarge)
+        }
     }
 }
 

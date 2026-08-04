@@ -3,6 +3,7 @@ package dev.vespian.model
 import android.content.Context
 import dev.vespian.Prefs
 import dev.vespian.db.Db
+import dev.vespian.db.Sip
 import dev.vespian.work.Screen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -62,6 +63,32 @@ object Delay {
             }
         }
         val offset = Engine.offsetHours()
+
+        // The same drinks with their hours, where they exist. The habit layer
+        // measures how late this person goes to bed compared with the gate the
+        // body opened, so the gate it compares against has to be the best one
+        // available. A gate computed from an averaged-out day would put the
+        // blame for a late night on habit when it belonged to an evening coffee.
+        val dosesByDate = HashMap<String, MutableList<Physics.Dose>>()
+        run {
+            val first = nights.firstOrNull()?.sleepStart
+                ?: (System.currentTimeMillis() - 7L * 86_400_000L)
+            val rows = withContext(Dispatchers.IO) {
+                runCatching {
+                    db.sips().between(first - 86_400_000L, System.currentTimeMillis() + 1)
+                }.getOrDefault(emptyList())
+            }
+            for (sip in rows) {
+                val mg = when (sip.kind) {
+                    Sip.KIND_COFFEE -> mgPerMug
+                    Sip.KIND_CAN -> mgPerCan
+                    else -> 0.0
+                }
+                if (mg <= 0.0) continue
+                dosesByDate.getOrPut(Drinks.dayKey(sip.at)) { ArrayList() }
+                    .add(Physics.Dose(Engine.hourOf(sip.at, offset), mg, sip.slackMinutes))
+            }
+        }
         val zone = ZoneId.systemDefault()
         val step = (filter.particles.size / SAMPLE).coerceAtLeast(1)
 
@@ -84,6 +111,7 @@ object Delay {
             if (woke == null) continue
 
             val caffeine = caffeineByDate[night.dateKey] ?: 0.0
+            val doses = dosesByDate[night.dateKey]
 
             // Preferred: the last time the screen went dark before this night.
             // That is the decision to stop, and it is compared with the bare
@@ -102,7 +130,7 @@ object Delay {
             var i = 0
             while (i < filter.particles.size) {
                 val p = filter.particles[i]
-                val g = filter.gateFrom(p, woke, Physics.L0, caffeine)
+                val g = filter.gateFrom(p, woke, Physics.L0, caffeine, doses)
                 gates.add(if (real) g else g + p.latency / 60.0)
                 i += step
             }

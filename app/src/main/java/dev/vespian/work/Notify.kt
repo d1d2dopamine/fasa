@@ -64,11 +64,14 @@ object Notify {
 
     // The permanent shade entry. Text carries the last reading so the user can
     // see at a glance that the sensor is alive.
-    fun service(context: Context, lux: Float?, samples: Int): Notification {
-        val text = if (lux == null) {
-            context.getString(R.string.nt_light_waiting)
-        } else {
-            context.getString(R.string.nt_light_value, Math.round(lux), samples)
+    fun service(context: Context, lux: Float?, samples: Int, total: Int = samples): Notification {
+        // [samples] are the trusted readings of today, [total] every row written.
+        // Saying both makes a stalled sampler impossible to confuse with a phone
+        // that spent the day in a pocket.
+        val text = when {
+            total <= 0 && lux == null -> context.getString(R.string.nt_light_waiting)
+            lux == null -> context.getString(R.string.nt_light_quiet, samples, total)
+            else -> context.getString(R.string.nt_light_value, Math.round(lux), samples, total)
         }
         return NotificationCompat.Builder(context, CH_SERVICE)
             .setSmallIcon(R.drawable.ic_stat_vespian)

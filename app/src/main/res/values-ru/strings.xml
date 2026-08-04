@@ -6,6 +6,7 @@
     <string name="tab_drift">Дрейф</string>
     <string name="tab_model">Модель</string>
     <string name="tab_data">Данные</string>
+    <string name="tab_pulse">Пульс</string>
 
     <string name="btn_permissions">Выдать разрешения</string>
     <string name="btn_sync">Синхронизировать</string>
@@ -18,6 +19,17 @@
     <string name="f_cold">Холодный старт. Реальных ночей ещё нет, поэтому это приоры по популяции. Коридоры сузятся, когда пойдут твои ночи.</string>
 
     <string name="f_gate">Ворота сна откроются</string>
+    <string name="now_sleep">Ложись сейчас</string>
+    <string name="now_sleep_why">Окно открыто. Закроется около %1$s.</string>
+    <string name="now_dim">Начни убавлять свет</string>
+    <string name="now_dim_why">Окно откроется около %1$s.</string>
+    <string name="now_answer">Ответь на один вопрос ниже</string>
+    <string name="now_answer_why">За сегодня ничего не отмечено, значит ночь — догадка.</string>
+    <string name="now_wait">Ничего делать не надо</string>
+    <string name="now_wait_why">Следующее — окно, около %1$s.</string>
+    <string name="now_more">Подробнее</string>
+    <string name="now_less">Свернуть</string>
+    <string name="f_nap">Дневной сон сегодня: %1$d мин. Он тратит реальное давление сна, и окно на ночь из-за него сдвинуто позже, а не проигнорировано.</string>
     <string name="f_onset">Заснёшь примерно в</string>
     <string name="f_wake">Естественное пробуждение</string>
     <string name="f_reverse">Крайний срок засыпания под будильник</string>
@@ -143,6 +155,11 @@
     <string name="tg_saved">Записал</string>
     <string name="tg_mood_done">Самочувствие: %1$s</string>
     <string name="tg_mugs_done">Кофе: %1$d кружек</string>
+    <string name="tg_q_late">Кофе или энергетик после 16:00 сегодня был? За день ничего не отмечено, а приблизительный ответ помогает прогнозу на ночь больше, чем идеально пустой день.</string>
+    <string name="tg_late_yes">Да</string>
+    <string name="tg_late_no">Нет</string>
+    <string name="tg_late_done_yes">Записал: что-то было после 16:00, точное время неизвестно.</string>
+    <string name="tg_late_done_no">Записал: после 16:00 ничего.</string>
     <string name="tg_q_mood">Как спалось? 1 разбит, 5 отлично.</string>
     <string name="tg_q_mugs">Сколько кружек кофе было перед этой ночью?</string>
     <string name="tg_ask_off_btn">Больше не спрашивать</string>
@@ -158,7 +175,7 @@
     <!-- Поведенческая задержка -->
     <string name="f_habit">Реальный отбой</string>
     <string name="f_habit_delay">%1$s к окну, по %2$d ночам</string>
-    <string name="f_habit_unknown">Ночей пока мало, привычку засиживаться после окна м��дель ещё не вы��чила.</string>
+    <string name="f_habit_unknown">Ночей пока мало, привычку засиживаться после окна модель ещё не выучила.</string>
     <!-- Экспорт -->
     <string name="btn_export">Скачать историю</string>
     <string name="export_hint">Один файл JSON со всеми ночами, ответами и параметрами модели. Текст внутри английский, чтобы его понял врач или нейросеть.</string>
@@ -182,7 +199,8 @@
     <string name="ch_alert_desc">Сообщает, когда браслет перестал присылать данные.</string>
     <string name="nt_light_title">Веспиан меряет свет</string>
     <string name="nt_light_waiting">Жду первый замер</string>
-    <string name="nt_light_value">%1$d люкс, замеров за сутки: %2$d</string>
+    <string name="nt_light_value">%1$d люкс · замеров за сутки: %2$d из %3$d</string>
+    <string name="nt_light_quiet">Датчик молчит · замеров за сутки: %1$d из %2$d</string>
     <string name="nt_stale_title">Нет новых данных</string>
     <string name="nt_stale_text">Ничего не приходило %1$d часов. Открой Mi Fitness для синхронизации.</string>
     <string name="ob_title">Настройка Веспиана</string>
@@ -190,7 +208,7 @@
     <string name="ob_health">Health Connect</string>
     <string name="ob_health_body">Сон и пульс с браслета.</string>
     <string name="ob_notif">Уведомления</string>
-    <string name="ob_notif_body">Нужны для датчика света и пр����д��пр��ждений о застое данных.</string>
+    <string name="ob_notif_body">Нужны для датчика света и предупреждений о застое данных.</string>
     <string name="ob_battery">Оптимизация батареи</string>
     <string name="ob_battery_body">Выключи её, иначе ежечасная синхронизация будет убита.</string>
     <string name="ob_autostart">Автозапуск</string>
@@ -340,6 +358,21 @@
     <string name="log_coffee_n">Кофе сегодня: %1$d</string>
     <string name="log_undo">Отменить</string>
     <string name="log_reset">Стереть</string>
+    <string name="log_when">Когда это было?</string>
+    <string name="log_when_now">Сейчас</string>
+    <string name="log_when_30">30 мин назад</string>
+    <string name="log_when_60">Час назад</string>
+    <string name="log_when_120">2+ часа назад</string>
+    <string name="log_when_at">Записано на %1$s.</string>
+    <string name="log_when_about">Записано примерно на %1$s, плюс-минус %2$d мин. Доза размазана по этому окну, а не привязана к минуте, которой скорее всего не было.</string>
+    <string name="log_late">Кофе после 16:00 был?</string>
+    <string name="log_late_hint">Один тап. Приблизительное «да» лучше пустого дня.</string>
+    <string name="log_late_yes">Да, был</string>
+    <string name="log_late_no">Нет</string>
+    <string name="log_habit">Обычно первая около %1$s.</string>
+    <string name="log_habit_yes">Да, около %1$s</string>
+    <string name="log_habit_no">Сегодня не было</string>
+    <string name="log_habit_hint">Догадка по твоей привычке за %1$d дней, а не замер. Правится одним тапом.</string>
     <string name="log_mood">Как самочувствие?</string>
     <string name="log_mood_set">Записано: %1$s</string>
     <string name="log_mood_none">Сегодня не отмечено</string>
@@ -419,6 +452,16 @@
     <string name="f_why">Почему такой прогноз</string>
 
     <!-- History of predictions against measured nights -->
+    <string name="f_cal_title">Как это работало на самом деле</string>
+    <string name="f_cal_conf">Уверенность в сегодняшнем окне</string>
+    <string name="f_cal_conf_v">%1$d%%</string>
+    <string name="f_cal_none">Пока ни одна ночь не проверена, поэтому этот процент — всё ещё мнение модели о себе самой. Сегодняшнее окно сохранено и будет сверено с тем, когда ты реально заснёшь.</string>
+    <string name="f_cal_prelim">Предварительно: проверено всего %1$d ночей, а нужно около %2$d, чтобы процент был измерением, а не догадкой.</string>
+    <string name="f_cal_wide">Сон попадал мимо окна чаще, чем обещалось, поэтому окно расширено — пока оно не перестанет преувеличивать свою точность.</string>
+    <string name="f_cal_tight">Сон попадал в окно чаще, чем обещалось, поэтому окно сужено — чтобы говорить более конкретно.</string>
+    <string name="f_cal_ok">Ширина окна совпадает с тем, как часто оно реально угадывало.</string>
+    <string name="f_cal_hint">Опубликованное окно — это обещание содержать ночь примерно в %1$d%% случаев. Эта карточка — проверка приложением самого себя: процент выше — то, что говорит история, а не то, во что модели хотелось бы верить.</string>
+
     <string name="f_hist">Последние две недели</string>
     <string name="f_hist_empty">Измеренных ночей пока нет. График заполнится по мере ночей.</string>
     <string name="f_hist_wait">Измерено ночей: %1$d. Ни для одной из них прогноз не был сохранен, поэтому оценки нет. Проверка начинается с сегодняшней ночи.</string>
@@ -439,6 +482,23 @@
     <string name="d_light_hint">Высота столбика — насколько этот час мог сдвинуть твои часы, а не сырые люксы. Свет насыщается: 300 люкс — уже половина эффекта от 3000.</string>
 
     <!-- Home screen widget -->
+    <string name="p_title">Пульс</string>
+    <string name="p_1d">24 ч</string>
+    <string name="p_7d">7 д</string>
+    <string name="p_30d">30 д</string>
+    <string name="p_90d">90 д</string>
+    <string name="p_none">За этот период замеров пульса нет. Они приходят при каждой синхронизации с Health Connect.</string>
+    <string name="p_low">Минимум</string>
+    <string name="p_avg">Средний</string>
+    <string name="p_high">Максимум</string>
+    <string name="p_bpm">%1$d уд/мин</string>
+    <string name="p_count">Замеров</string>
+    <string name="p_count_value">%1$d</string>
+    <string name="p_span">Период</string>
+    <string name="p_hint">Каждая точка — среднее по отрезку периода, поэтому длинный период выглядит ровнее, а не шумнее. Полоса вокруг линии — от минимума до максимума внутри отрезка.</string>
+    <string name="p_nadir">Низшая точка ритма</string>
+    <string name="p_nadir_none">замеров пока мало</string>
+
     <string name="widget_title">ЗАСНЕШЬ ОКОЛО</string>
     <string name="widget_none">Прогноза нет</string>
     <string name="widget_range">с %1$s до %2$s</string>

@@ -10,7 +10,8 @@ how confident it is about that prediction.
 ## What it does
 
 - Reads sleep sessions, sleep stages, heart rate and SpO2 from **Health Connect**.
-- Stores everything in a local Room database, forever.
+- Stores every night in a local Room database, forever. Raw heart rate and light
+  samples are kept for 90 days, which is all the model ever looks back at.
 - Samples ambient light through the phone's light sensor.
 - Fits a **two-process model** of sleep regulation (Borbély, 1982) with a
   particle filter, and reports a confidence percentage with every prediction.
@@ -101,10 +102,55 @@ app/src/main/java/dev/vespian/
 | Part | Contents | State |
 |---|---|---|
 | 1 | Skeleton, database, Health Connect ingestion, settings, self-test | ✅ done |
-| 2 | Particle filter, two-process model, predictions | in progress |
-| 3 | Telegram bot, light sensor service, background jobs | planned |
-| 4 | Screens | planned |
+| 2 | Particle filter, two-process model, predictions | ✅ done |
+| 3 | Telegram bot, light sensor service, background jobs, widget | ✅ done |
+| 4 | Screens | ✅ done |
+
+Known gaps, in the order they are worth closing:
+
+- The confidence percentage is derived from the width of the band, not
+  calibrated against the hit rate the app already records.
+- No automated tests. The model math is only ever checked by living with it.
+- Drinks are asked as a count per day, without the time they were consumed.
+- SpO2 is imported and stored but not yet used by the model.
+- Naps shorter than two hours are ignored entirely.
+
+## Not a medical device
+
+Vespian is a hobby project, not a medical device, and it does not diagnose or
+treat anything. Its predictions are a model's best guess from your own past
+nights, and the model is sometimes wrong — which is why every prediction is
+shown with how confident it is. Nothing here replaces a doctor, and nothing here
+should be used to decide anything about medication.
 
 ## License
 
-MIT. Do whatever you want with it.
+GNU General Public License, version 3 or later. The full text is in
+[LICENSE](LICENSE).
+
+```
+Copyright (C) Vespian contributors
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program. If not, see <https://www.gnu.org/licenses/>.
+```
+
+This notice is written to be permanent. It carries no year and no version
+number of the app, and it says "version 3 or, at your option, any later
+version", so it covers every build that has ever been made from this repository
+and every build made from it in the future. Releasing an update does not require
+touching it. Copyright is credited to "Vespian contributors" rather than to a
+list of names, so a new contributor does not require an edit either.
+
+In short: anyone may use, study, change and share this app for free, and anyone
+who distributes a changed version has to publish their source too, under the
+same licence. It cannot be turned into a closed paid product.

@@ -72,10 +72,13 @@ class ForecastWidget : AppWidgetProvider() {
 
         val onset = forecast.onset
         // Same honesty rule as the ring: a single time is printed only when the
-        // band is narrow enough to mean anything.
+        // window has earned it. Earned means measured, so the certainty here is
+        // the one calibrated against how often the window contained the night,
+        // not the band's agreement with itself.
+        val certainty = forecast.calib?.confidence(onset) ?: onset.confidence
         views.setTextViewText(
             R.id.widget_value,
-            if (onset.confidence >= 0.5) hhmm(onset.median)
+            if (certainty >= 0.5) hhmm(onset.median)
             else context.getString(R.string.widget_range, hhmm(onset.low), hhmm(onset.high)),
         )
         views.setTextViewText(

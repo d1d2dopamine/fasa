@@ -43,9 +43,30 @@ class SyncWorker(context: Context, params: WorkerParameters) :
             is HealthRepo.Result.Failed -> return Result.retry()
         }
 
-        // Light samples older than ninety days cannot influence today's phase.
-        db.light().prune(now - PRUNE_AFTER_MS)
-        db.hr().prune(now - PRUNE_AFTER_MS)
+        // A rolling window instead of a purge by age.
+        //
+        // Deleting everything older than ninety days means a batch of history
+        // disappears the moment it crosses the line. Capping by row count means
+        // one new reading pushes out exactly one old reading: the oldest row is
+        // replaced by the newest, the window keeps its length, and nothing ever
+        // vanishes in a lump.
+        //
+        // Anything unreadable goes first, so a broken row cannot occupy a slot
+        // that a real reading could have used.
+        runCatching { db.hr().dropBroken() }
+        runCatching { db.light().dropBroken() }
+        db.hr().cap(KEEP_ROWS)
+        db.light().cap(KEEP_ROWS)
+
+        // Drinks are a handful of rows a day, so the same ninety day window
+        // costs almost nothing. A drink dated in the future can only be a bug
+        // or a clock change, and it would sit in the caffeine total forever.
+        runCatching { db.sips().dropBroken(now) }
+        runCatching { db.sips().cap(KEEP_SIPS) }
+
+        // Naps are a row or two a day at most, same ninety day window.
+        runCatching { db.naps().dropBroken(now) }
+        runCatching { db.naps().cap(KEEP_NAPS) }
 
         checkStale(context, now)
 
@@ -106,6 +127,20 @@ class SyncWorker(context: Context, params: WorkerParameters) :
         // Local hours. The window wraps past midnight on purpose.
         private const val EVENING_FROM_H = 18.0
         private const val EVENING_TO_H = 4.0
-        private const val PRUNE_AFTER_MS = 90 * DAY_MS
+
+        /**
+         * How many heart rate and light rows to keep.
+         *
+         * Both tables hold one row every five minutes, so 288 a day. Ninety
+         * days of that is the window below, which is exactly as far back as the
+         * model ever looks.
+         */
+        private const val KEEP_ROWS = 90 * 288
+
+        // Ninety days at a generous twenty drinks a day.
+        private const val KEEP_SIPS = 90 * 20
+
+        // Ninety days at a generous four daytime sleeps a day.
+        private const val KEEP_NAPS = 90 * 4
     }
 }

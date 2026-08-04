@@ -190,6 +190,8 @@ class Filter(val particles: MutableList<Particle>) {
         mood: Int? = null,
         onsetScale: Double = 1.0,
         alcoholDoses: Double = 0.0,
+        doses: List<Physics.Dose>? = null,
+        naps: List<DoubleArray>? = null,
     ) {
         val duration = sleepEndHour - sleepStartHour
         if (duration <= 0.0 || duration > 16.0) return
@@ -228,7 +230,7 @@ class Filter(val particles: MutableList<Particle>) {
 
         for (p in particles) {
             // Pressure starts where the last night left it, not at the floor.
-            val predictedGate = gateFrom(p, wokeAtHour, p.sWake, caffeineMg)
+            val predictedGate = gateFrom(p, wokeAtHour, p.sWake, caffeineMg, doses, naps)
             // Drink shortens the wait for sleep. How much is personal, so a
             // night that began unusually fast after a few doses is evidence
             // about this body's sensitivity, not noise to be shrugged off.
@@ -416,12 +418,39 @@ class Filter(val particles: MutableList<Particle>) {
     // ---- simulation ------------------------------------------------------
 
     // Walk pressure forward from the last wake up until it crosses the gate.
-    fun gateFrom(p: Particle, wokeAtHour: Double, sAtWake: Double, caffeineMg: Double): Double {
+    // [doses] is the day's drinks with the hours they happened. When it is
+    // given, [caffeineMg] is ignored: the times are strictly better evidence
+    // than the total, and a night that has them should not be diluted by a
+    // number that assumes everything was drunk at once. Nights logged before
+    // the app recorded times pass null and keep the old behaviour, so history
+    // does not have to be rewritten to be usable.
+    fun gateFrom(
+        p: Particle,
+        wokeAtHour: Double,
+        sAtWake: Double,
+        caffeineMg: Double,
+        doses: List<Physics.Dose>? = null,
+        naps: List<DoubleArray>? = null,
+    ): Double {
         var s = sAtWake
         var t = wokeAtHour
         val limit = wokeAtHour + 30.0
         while (t < limit) {
-            val caf = Physics.caffeine(caffeineMg, t - wokeAtHour, p.cafHalfLife)
+            // Asleep in the afternoon. Pressure falls the same way it falls at
+            // night, and the gate cannot be reported as opening here: the point
+            // of the nap is that some of the pressure that would have opened it
+            // has already been spent.
+            val napping = naps != null && naps.any { t >= it[0] && t < it[1] }
+            if (napping) {
+                s = Physics.fall(s, STEP_H, p.tauFall)
+                t += STEP_H
+                continue
+            }
+            val caf = if (doses != null) {
+                Physics.caffeineFrom(doses, t, p.cafHalfLife)
+            } else {
+                Physics.caffeine(caffeineMg, t - wokeAtHour, p.cafHalfLife)
+            }
             if (s >= Physics.upperThreshold(t, p, caf)) return t
             s = Physics.rise(s, STEP_H, p.tauRise)
             t += STEP_H
@@ -431,10 +460,15 @@ class Filter(val particles: MutableList<Particle>) {
 
     // Where the cloud currently thinks the gate opens, given a wake up and a
     // caffeine load. The behavioural layer measures its gap against this.
-    fun gateMedian(wokeAtHour: Double, caffeineMg: Double): Double {
+    fun gateMedian(
+        wokeAtHour: Double,
+        caffeineMg: Double,
+        doses: List<Physics.Dose>? = null,
+        naps: List<DoubleArray>? = null,
+    ): Double {
         val values = DoubleArray(particles.size) { i ->
             val p = particles[i]
-            gateFrom(p, wokeAtHour, p.sWake, caffeineMg)
+            gateFrom(p, wokeAtHour, p.sWake, caffeineMg, doses, naps)
         }
         return band(values).median
     }
@@ -543,6 +577,8 @@ class Filter(val particles: MutableList<Particle>) {
         nights: Int,
         targetWake: Double?,
         alcoholDoses: Double = 0.0,
+        doses: List<Physics.Dose>? = null,
+        naps: List<DoubleArray>? = null,
     ): Forecast {
         val n = particles.size
         val gates = DoubleArray(n)
@@ -552,7 +588,7 @@ class Filter(val particles: MutableList<Particle>) {
 
         for (i in 0 until n) {
             val p = particles[i]
-            val g = gateFrom(p, wokeAtHour, p.sWake, caffeineMg)
+            val g = gateFrom(p, wokeAtHour, p.sWake, caffeineMg, doses, naps)
             val alcLoss = Physics.alcoholLoss(p, alcoholDoses)
             val o = g + p.latency *
                 (1.0 - alcLoss).coerceAtLeast(Physics.ALC_LATENCY_FLOOR) / 60.0

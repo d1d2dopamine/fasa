@@ -7,6 +7,7 @@ import dev.vespian.db.Answer
 import dev.vespian.db.Db
 import dev.vespian.db.Forced
 import dev.vespian.db.Meta
+import dev.vespian.model.Drinks
 import dev.vespian.model.Engine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -30,6 +31,12 @@ object Bot {
     const val K_OUTBOX = "tg_outbox"
     const val K_MORNING = "tg_morning_date"
     const val K_EVENING = "tg_evening_date"
+
+    // The day the late caffeine question went out in the chat. Separate from
+    // the flag that says the day was answered: asking is not an answer, and the
+    // app screen must stay free to ask the same thing until one of them is
+    // tapped.
+    const val K_LATE = "tg_late_date"
 
     // When the last unanswered question went out. While this is set and fresh,
     // the light service holds a connection open instead of polling on a timer.
@@ -58,6 +65,7 @@ object Bot {
         runCatching { Commands.flushRefit(context) }
         maybeMorning(context)
         maybeEvening(context)
+        maybeLate(context)
         drain(context, token, chat)
         got
     }
@@ -173,6 +181,17 @@ object Bot {
         var maxId = offset
         for (u in updates) {
             maxId = maxOf(maxId, u.optLong("update_id") + 1)
+
+            // Anything not coming from the configured chat is dropped, but the
+            // offset above still moves past it so a stranger cannot wedge the
+            // stream by writing to the bot for ever.
+            //
+            // A bot username is public and its token is one leaked screenshot
+            // away. Without this check whoever finds the bot can type /export
+            // and receive the entire sleep database, or answer the morning
+            // questions on someone else's behalf.
+            if (!fromOwner(chat, u)) continue
+
             val cb = u.optJSONObject("callback_query")
             if (cb != null) {
                 // One bad tap must never wedge the stream. Without this guard a
@@ -188,6 +207,20 @@ object Bot {
         }
         db.meta().put(Meta(K_OFFSET, maxId.toString()))
         return true
+    }
+
+    // Whether an update belongs to the one chat this app answers to. Telegram
+    // puts the chat on the message, and on a button tap on the message the
+    // button was attached to; the sender id is accepted as well because in a
+    // private chat the two are the same number.
+    private fun fromOwner(chat: String, update: JSONObject): Boolean {
+        if (chat.isEmpty()) return false
+        val cb = update.optJSONObject("callback_query")
+        val msg = cb?.optJSONObject("message") ?: update.optJSONObject("message")
+        val chatId = msg?.optJSONObject("chat")?.optString("id").orEmpty()
+        val senderId = (cb ?: update.optJSONObject("message"))
+            ?.optJSONObject("from")?.optString("id").orEmpty()
+        return chat == chatId || chat == senderId
     }
 
     // callback_data is "m:<date>:<value>" for mood, "c:<date>:<value>" for
@@ -274,6 +307,32 @@ object Bot {
                     token, chat, mid,
                     Lang.string(context, R.string.tg_ask_off),
                 )
+            }
+            clearAsked(context)
+            return
+        }
+
+        // The evening question about late caffeine. Two buttons and no
+        // numbers: on a day nobody logged, "something after four" is the whole
+        // of what can honestly be recovered, and it is worth far more to
+        // tonight's forecast than the empty day it replaces.
+        if (data.startsWith("j:")) {
+            val p = data.split(":")
+            if (p.size == 3) {
+                val yes = p[2] == "1"
+                if (yes) runCatching { Drinks.logLate(context) }
+                else runCatching { Drinks.markSettled(context) }
+                val mid = cb.optJSONObject("message")?.optInt("message_id")
+                if (mid != null && mid != 0) {
+                    Telegram.editText(
+                        token, chat, mid,
+                        Lang.string(
+                            context,
+                            if (yes) R.string.tg_late_done_yes else R.string.tg_late_done_no,
+                        ),
+                    )
+                }
+                runCatching { Commands.refitSoon(context) }
             }
             clearAsked(context)
             return
@@ -396,6 +455,31 @@ object Bot {
         val text = Commands.forecastText(context) ?: return
         enqueue(context, text, null, Commands.menu(context))
         db.meta().put(Meta(K_EVENING, today))
+    }
+
+    // One question, in the evening, only on a day that has nothing on it.
+    //
+    // Silenced by the same switch as the morning drink question, because a
+    // person who turned drink questions off did not mean "except this one".
+    private suspend fun maybeLate(context: Context) {
+        if (!Prefs.askDrinks(context)) return
+        val db = Db.get(context)
+        val today = Drinks.dayKey()
+        if (db.meta().get(K_LATE) == today) return
+        if (!Drinks.shouldAskLate(context)) return
+
+        enqueue(
+            context,
+            Lang.string(context, R.string.tg_q_late),
+            Telegram.keyboard(
+                Telegram.row(
+                    Lang.string(context, R.string.tg_late_yes) to "j:$today:1",
+                    Lang.string(context, R.string.tg_late_no) to "j:$today:0",
+                )
+            ),
+        )
+        db.meta().put(Meta(K_LATE, today))
+        markAsked(context)
     }
 
     // ---- manual test -----------------------------------------------------

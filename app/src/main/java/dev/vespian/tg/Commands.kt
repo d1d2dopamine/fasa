@@ -500,9 +500,12 @@ object Commands {
             )
         )
         sb.append("\n")
+        // Calibrated certainty, the same number the screen shows: how often the
+        // published window has actually contained the night.
+        val certainty = f.calib?.confidence(f.onset) ?: f.onset.confidence
         val trust = when {
-            f.onset.confidence >= 0.66 -> R.string.tgb_why_trust_high
-            f.onset.confidence >= 0.33 -> R.string.tgb_why_trust_mid
+            certainty >= 0.66 -> R.string.tgb_why_trust_high
+            certainty >= 0.33 -> R.string.tgb_why_trust_mid
             else -> R.string.tgb_why_trust_low
         }
         sb.append(Lang.string(context, trust, f.nights))

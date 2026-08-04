@@ -13,10 +13,12 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         HrSample::class,
         LightSample::class,
         Answer::class,
+        Sip::class,
+        Nap::class,
         ModelState::class,
         Meta::class,
     ],
-    version = 4,
+    version = 6,
     exportSchema = false,
 )
 abstract class Db : RoomDatabase() {
@@ -24,6 +26,8 @@ abstract class Db : RoomDatabase() {
     abstract fun hr(): HrDao
     abstract fun light(): LightDao
     abstract fun answers(): AnswerDao
+    abstract fun sips(): SipDao
+    abstract fun naps(): NapDao
     abstract fun model(): ModelDao
     abstract fun meta(): MetaDao
 
@@ -86,6 +90,52 @@ abstract class Db : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds the per drink log with times.
+         *
+         * The daily counts in `answers` stay exactly as they are and keep
+         * working. This table sits beside them and records when each drink
+         * happened, so caffeine can be decayed from the hour it was taken
+         * instead of from an assumed eleven in the morning.
+         *
+         * A new empty table only. Nothing already recorded is read or written
+         * here, and days logged before this build keep being scored the old
+         * way rather than being silently reinterpreted.
+         */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `sips` " +
+                        "(`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`at` INTEGER NOT NULL, " +
+                        "`loggedAt` INTEGER NOT NULL, " +
+                        "`kind` INTEGER NOT NULL, " +
+                        "`slackMinutes` INTEGER NOT NULL DEFAULT 0)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_sips_at` ON `sips` (`at`)")
+            }
+        }
+
+        /**
+         * Adds the daytime sleep table.
+         *
+         * A new empty table only, so nothing recorded can be lost. Naps are not
+         * back filled either: the band's older short sessions were never stored
+         * and cannot be recovered, and inventing them would change the meaning
+         * of every night already fitted.
+         */
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `naps` " +
+                        "(`start` INTEGER NOT NULL, " +
+                        "`end` INTEGER NOT NULL, " +
+                        "`source` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`start`))"
+                )
+            }
+        }
+
         @Volatile
         private var instance: Db? = null
 
@@ -95,7 +145,7 @@ abstract class Db : RoomDatabase() {
                     context.applicationContext,
                     Db::class.java,
                     "vespian.db",
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .build()
                     .also { instance = it }
             }
