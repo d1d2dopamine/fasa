@@ -23,6 +23,17 @@ jobs:
             exit 1
           fi
 
+      # An apostrophe inside a string resource has to be written as \' or the
+      # resource compiler refuses the whole file. The error it prints talks
+      # about unicode escapes and names the wrong thing, which cost a build to
+      # work out, so it is caught here in one line instead.
+      - name: Check for unescaped apostrophes in strings
+        run: |
+          if grep -rnP "<string[^>]*>[^<]*(?<!\\\\)'" app/src/main/res --include='strings.xml' ; then
+            echo "::error::Lines above contain an unescaped apostrophe in a string resource. Write it as \\'."
+            exit 1
+          fi
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
