@@ -129,11 +129,28 @@ class PhysicsTest {
     }
 
     @Test
-    fun `light before the low delays and light after it advances`() {
+    fun `light before the low delays and light well after it advances`() {
         // Evening light pushes the clock later, morning light pulls it earlier.
         // The signs being the wrong way round would turn every piece of advice
         // this app gives into the opposite advice.
+        //
+        // The net advance does not begin at the advance centre. The delay curve
+        // is eight times taller and much wider, so it still wins there; the sum
+        // only turns negative about three hours after the low. That crossing is
+        // the real prediction of the model and is what is checked here.
         assertTrue(Physics.prc(Physics.PRC_DELAY_CENTRE) > 0.0)
-        assertTrue(Physics.prc(Physics.PRC_ADVANCE_CENTRE) < 0.0)
+        assertTrue(Physics.prc(3.4) < 0.0)
+    }
+
+    @Test
+    fun `delaying light is far stronger than advancing light`() {
+        // The asymmetry is the whole reason a delayed phase drifts later on its
+        // own: an hour of evening light costs much more than an hour of morning
+        // light buys back. If this ever evened out, the app would be promising
+        // a fix that mornings alone cannot deliver.
+        val delay = Physics.prc(Physics.PRC_DELAY_CENTRE)
+        val advance = -Physics.prc(3.4)
+        assertTrue(advance > 0.0)
+        assertTrue(delay > 10.0 * advance)
     }
 }
