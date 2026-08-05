@@ -1,131 +1,106 @@
-// Inside a Kotlin DSL build script the name `java` resolves to the Gradle Java
-// extension, not to the JDK package, so java.time.* must be imported.
-import java.time.Instant
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
-
 plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.android")
-    id("org.jetbrains.kotlin.plugin.compose")
-    id("com.google.devtools.ksp")
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    // Compose compiler is a separate Gradle plugin since Kotlin 2.0; without it
+    // AGP fails configuration as soon as buildFeatures.compose is enabled.
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
 }
 
-// Build identity.
+// ---------------------------------------------------------------------------
+// Fixed signing identity.
 //
-// On GitHub Actions the run number becomes the build number, so every artifact
-// is distinguishable and every new build installs over the previous one. A
-// local build gets zero and the sha "local".
-val vespianRun: Int = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
-val vespianSha: String = (System.getenv("GITHUB_SHA") ?: "local").take(7)
-val vespianBuiltAt: String = DateTimeFormatter
-    .ofPattern("yyyy-MM-dd HH:mm 'UTC'")
-    .withZone(ZoneOffset.UTC)
-    .format(Instant.now())
+// Gradle would otherwise create a fresh ~/.android/debug.keystore on every CI
+// runner, producing a different signature per build. Android then refuses to
+// install the new APK over the old one and you would have to uninstall first,
+// which destroys the review history.
+//
+// So the keystore lives in the repository (ikna.keystore) with the password
+// below. Nothing to generate, nothing to paste into repository secrets: clone,
+// push, build, install updates forever.
+//
+// This is deliberately not a secret. The trade-off is written down in
+// docs/KEYSTORE.md: the key only protects app-update identity for a personal
+// app that is never published to a store. If this project is ever put on Google
+// Play, replace this keystore with a private one before the first upload.
+// ---------------------------------------------------------------------------
+val keystoreFile = rootProject.file("ikna.keystore")
+val keystorePassword = "iknafixedkey"
+val keystoreAlias = "ikna"
+val hasFixedKey = keystoreFile.exists()
 
 android {
-    namespace = "dev.vespian"
-    compileSdk = 36
+    namespace = "dev.ikna"
+    compileSdk = 35
 
     defaultConfig {
-        applicationId = "dev.vespian"
-        minSdk = 28
-        targetSdk = 34
-        versionCode = 2 + vespianRun
-        versionName = "0.2." + vespianRun
-        resourceConfigurations += listOf("en", "ru")
+        // Never change this, and never add a debug suffix: a different
+        // applicationId is a different app with a different database.
+        applicationId = "dev.ikna"
+        minSdk = 29
+        targetSdk = 35
+        versionCode = (System.getenv("RUN_NUMBER") ?: "1").toInt()
+        versionName = "0.1." + (System.getenv("RUN_NUMBER") ?: "1")
 
-        buildConfigField("String", "GIT_SHA", "\"" + vespianSha + "\"")
-        buildConfigField("String", "BUILD_AT", "\"" + vespianBuiltAt + "\"")
-    }
-
-    buildFeatures {
-        compose = true
-        buildConfig = true
+        ksp { arg("room.schemaLocation", "$projectDir/schemas") }
     }
 
     signingConfigs {
-        // A fixed key, committed on purpose.
-        //
-        // Without it every CI run generates a fresh random debug key, Android
-        // treats each build as a different app, and the only way to install a
-        // new version is to uninstall the old one. That wipes the database,
-        // the trained model and every battery exemption granted by hand.
-        //
-        // The key has no security value: this app is sideloaded, never
-        // published, and holds no secrets of its own.
-        getByName("debug") {
-            storeFile = file("vespian-debug.jks")
-            storePassword = "vespianpass"
-            keyAlias = "vespian"
-            keyPassword = "vespianpass"
+        create("fixed") {
+            if (hasFixedKey) {
+                storeFile = keystoreFile
+                storeType = "PKCS12"
+                storePassword = keystorePassword
+                keyAlias = keystoreAlias
+                keyPassword = keystorePassword
+            }
         }
     }
 
     buildTypes {
         debug {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            if (hasFixedKey) signingConfig = signingConfigs.getByName("fixed")
         }
-        // Signed with the same key as debug on purpose: the release build must
-        // install straight over an existing debug install, and this key guards
-        // nothing. What changes is the compiler: Compose and Kotlin optimise
-        // the release variant, which is where the screen stalls came from.
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (hasFixedKey) signingConfig = signingConfigs.getByName("fixed")
         }
     }
+
+    buildFeatures { compose = true }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-
-        // Every source and resource file in this project is UTF-8. Said out
-        // loud, because a build machine with a different default locale reads
-        // Cyrillic bytes as its own encoding and silently turns letters it
-        // cannot map into the replacement diamond.
-        encoding = "UTF-8"
     }
+    kotlinOptions { jvmTarget = "17" }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
 
 dependencies {
-    implementation("androidx.core:core-ktx:1.15.0")
-    implementation("androidx.appcompat:appcompat:1.7.0")
-    implementation("androidx.activity:activity-ktx:1.9.3")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
 
-    // Compose. The BOM pins every compose artifact to one compatible set,
-    // so the individual artifacts below carry no version on purpose.
-    val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
-    implementation(composeBom)
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-graphics")
-    implementation("androidx.compose.foundation:foundation")
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-extended")
-    implementation("androidx.activity:activity-compose:1.9.3")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.graphics)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.lottie.compose)
 
-    implementation("androidx.health.connect:connect-client:1.1.0-rc02")
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
 
-    implementation("androidx.room:room-runtime:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
-    ksp("androidx.room:room-compiler:2.6.1")
-
-    // Encrypted storage for the Telegram token. Alpha is the only channel this
-    // library has shipped in for years; the API used here is stable.
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
-
-    implementation("androidx.work:work-runtime-ktx:2.10.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
-
-    // Plain JVM tests for the arithmetic under the forecast. No Android, no
-    // emulator, no device: they run in a couple of seconds on every push, which
-    // is the only kind of test that actually keeps getting run.
-    testImplementation("junit:junit:4.13.2")
+    implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.serialization.json)
 }

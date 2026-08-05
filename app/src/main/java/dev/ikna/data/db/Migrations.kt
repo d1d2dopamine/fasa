@@ -1,0 +1,64 @@
+package dev.ikna.data.db
+
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
+
+/**
+ * Every schema change gets an explicit migration here.
+ *
+ * Rules:
+ *  - `reviews` may only gain columns. Never rewrite, never drop.
+ *  - Derived tables (`components`, `daily_stats`, `governor_log`) may be dropped
+ *    and recreated; they are rebuilt from `reviews` by
+ *    [dev.ikna.data.repo.ComponentRepository.rebuildFromReviews].
+ *  - Content tables (`chunks`, `chunk_tokens`) may be dropped and recreated;
+ *    packs are reinstalled from assets on next launch.
+ */
+object IknaMigrations {
+
+    /**
+     * v1 -> v2
+     *
+     *  - `reviews` gains the before-state snapshot that makes undo possible,
+     *    plus `undoOf` so a retraction is an inserted row rather than an edit.
+     *    All new columns are nullable with no default, so rows written by v1
+     *    stay valid; an answer from before this update simply cannot be undone.
+     *  - `packs` gains a title and an on/off switch for the Decks screen.
+     *  - `daily_plan` is new: the day's plan is decided once and persisted,
+     *    which is what stops the session counter from growing while the user
+     *    answers cards.
+     */
+    private val MIGRATION_1_2 = object : Migration(1, 2) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE reviews ADD COLUMN prevStability REAL")
+            db.execSQL("ALTER TABLE reviews ADD COLUMN prevDifficulty REAL")
+            db.execSQL("ALTER TABLE reviews ADD COLUMN prevDueAt INTEGER")
+            db.execSQL("ALTER TABLE reviews ADD COLUMN prevLastReviewAt INTEGER")
+            db.execSQL("ALTER TABLE reviews ADD COLUMN prevReps INTEGER")
+            db.execSQL("ALTER TABLE reviews ADD COLUMN prevLapses INTEGER")
+            db.execSQL("ALTER TABLE reviews ADD COLUMN prevIsNew INTEGER")
+            db.execSQL("ALTER TABLE reviews ADD COLUMN prevInAmnesty INTEGER")
+            db.execSQL("ALTER TABLE reviews ADD COLUMN undoOf INTEGER")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_reviews_undoOf ON reviews (undoOf)")
+
+            db.execSQL("ALTER TABLE packs ADD COLUMN title TEXT")
+            db.execSQL("ALTER TABLE packs ADD COLUMN isActive INTEGER NOT NULL DEFAULT 1")
+
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS daily_plan (" +
+                    "day TEXT NOT NULL, " +
+                    "plannedIds TEXT NOT NULL, " +
+                    "plannedTotal INTEGER NOT NULL, " +
+                    "capacity INTEGER NOT NULL, " +
+                    "allowedNew INTEGER NOT NULL, " +
+                    "amnestyQuota INTEGER NOT NULL, " +
+                    "reason TEXT NOT NULL, " +
+                    "extraRequested INTEGER NOT NULL, " +
+                    "createdAt INTEGER NOT NULL, " +
+                    "PRIMARY KEY(day))"
+            )
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2)
+}

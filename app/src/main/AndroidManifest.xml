@@ -1,131 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    <uses-permission
-        android:name="android.permission.BLUETOOTH_CONNECT"
-        android:usesPermissionFlags="neverForLocation" />
-
-    <uses-permission android:name="android.permission.health.READ_SLEEP" />
-    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
-    <uses-permission android:name="android.permission.health.READ_STEPS" />
-    <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
-    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
-    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY" />
-
-    <uses-feature
-        android:name="android.hardware.sensor.light"
-        android:required="false" />
-
-    <queries>
-        <package android:name="com.google.android.apps.healthdata" />
-    </queries>
 
     <application
-        android:name=".VespianApp"
+        android:name=".IknaApp"
         android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
+        android:theme="@style/Theme.Ikna">
 
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.Ikna">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-
-            <!-- Health Connect permission rationale, Android 13 and below -->
-            <intent-filter>
-                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
-            </intent-filter>
         </activity>
-
-        <activity
-            android:name=".OnboardingActivity"
-            android:exported="false" />
-
-        <activity
-            android:name=".SettingsActivity"
-            android:exported="false"
-            android:label="@string/settings_title" />
-
-        <!-- Ambient light sampler. Special use: this is not location, media or
-             any other predefined type, it reads a sensor on a fixed schedule. -->
-        <service
-            android:name=".work.LightService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Periodic ambient light sampling for circadian phase estimation" />
-        </service>
-
-        <receiver
-            android:name=".work.BootReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-            </intent-filter>
-        </receiver>
-
-        <!-- Home screen widget with tonight's window. Exported because the
-             launcher itself sends the update broadcast. -->
-        <receiver
-            android:name=".work.ForecastWidget"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/widget_forecast_info" />
-        </receiver>
-
-        <!-- Answers tapped from a notification. Not exported: the only sender
-             is this app's own notification. -->
-        <receiver
-            android:name=".work.Reply"
-            android:exported="false" />
-
-        <!-- Fires every fifteen minutes and restarts the service if the
-             heartbeat has gone stale. Not exported: only our own alarm. -->
-        <receiver
-            android:name=".work.WatchdogReceiver"
-            android:exported="false" />
-
-        <!-- Health Connect permission rationale, Android 14 and above.
-             Without this the app never shows up in the Health Connect app list. -->
-        <activity-alias
-            android:name="ViewPermissionUsageActivity"
-            android:exported="true"
-            android:targetActivity=".MainActivity"
-            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
-                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
-            </intent-filter>
-        </activity-alias>
-
-        <!-- Persists the in-app language choice on Android 12 and below -->
-        <service
-            android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
-            android:enabled="false"
-            android:exported="false">
-            <meta-data
-                android:name="autoStoreLocales"
-                android:value="true" />
-        </service>
-
     </application>
 </manifest>
